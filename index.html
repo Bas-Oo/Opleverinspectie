@@ -696,14 +696,14 @@ function nieuwObject(adres, type) {
     aannemer: db.instellingen.aannemer || '', vertKoper: '', vertAannemer: '',
     opnames: {
       voor: nieuweOpname(),
-      oplever: Object.assign(nieuweOpname(), { gestart: false })
+      oplever: Object.assign(nieuweOpname(), { gestart: false, datum: '' })
     },
     meter: { datum: '', netElektra: db.instellingen.netElektra || '', netWater: db.instellingen.netWater || '', door: '', standen: {}, fotos: {} },
     gemaakt: new Date().toISOString()
   };
 }
 function nieuweOpname() {
-  return { datum: '', punten: [], handtekeningen: { plaats: 'Wageningen', datum: '', koper: null, aannemer: null } };
+  return { datum: vandaag(), punten: [], handtekeningen: { plaats: 'Wageningen', datum: '', koper: null, aannemer: null } };
 }
 function nieuwPunt() {
   return { id: uid(), ruimte: '', omschrijving: '', urgentie: '', nietErkend: false, paraaf: false, fotoId: null, uitVooropname: false, bronId: null, hersteld: null };
@@ -765,13 +765,12 @@ function blokTellers(b) {
 }
 
 /* Suggesties: eerder ingevoerde waarden binnen het complex */
-function suggesties(veld, tekst) {
+function suggesties(veld, tekst, bron) {
   const c = vindComplex(); if (!c) return [];
   const freq = new Map();
-  c.blokken.forEach(b => b.objecten.forEach(o => ['voor', 'oplever'].forEach(k => o.opnames[k].punten.forEach(p => {
-    const v = (p[veld] || '').trim(); if (!v) return;
-    const key = v.toLowerCase(); const e = freq.get(key) || { v, n: 0 }; e.n++; freq.set(key, e);
-  }))));
+  const tel = v => { v = (v || '').trim(); if (!v) return; const key = v.toLowerCase(); const e = freq.get(key) || { v, n: 0 }; e.n++; freq.set(key, e); };
+  if (bron === 'object') c.blokken.forEach(b => b.objecten.forEach(o => tel(o[veld])));
+  else c.blokken.forEach(b => b.objecten.forEach(o => ['voor', 'oplever'].forEach(k => o.opnames[k].punten.forEach(p => tel(p[veld])))));
   const q = (tekst || '').trim().toLowerCase();
   return Array.from(freq.values())
     .filter(e => !q || (e.v.toLowerCase().includes(q) && e.v.toLowerCase() !== q))
@@ -842,6 +841,24 @@ async function bewaarFoto(file, oudId) {
   return id;
 }
 async function verwijderFoto(id) { if (!id) return; await dbDel('fotos', id).catch(() => {}); if (fotoURLs.has(id)) { URL.revokeObjectURL(fotoURLs.get(id)); fotoURLs.delete(id); } }
+/* Alle foto-id's van één object: puntfoto's, handtekeningen en meterfoto's */
+function fotoIdsVanObject(o) {
+  const ids = [];
+  ['voor', 'oplever'].forEach(k => {
+    const op = o.opnames && o.opnames[k]; if (!op) return;
+    (op.punten || []).forEach(p => p.fotoId && ids.push(p.fotoId));
+    ['koper', 'aannemer'].forEach(x => op.handtekeningen && op.handtekeningen[x] && ids.push(op.handtekeningen[x]));
+  });
+  if (o.meter && o.meter.fotos) Object.values(o.meter.fotos).forEach(id => id && ids.push(id));
+  return ids;
+}
+const objectenVanBlok = b => b.objecten || [];
+const objectenVanComplex = c => (c.blokken || []).reduce((a, b) => a.concat(objectenVanBlok(b)), []);
+async function verwijderFotosVanObjecten(objecten) {
+  const ids = objecten.reduce((a, o) => a.concat(fotoIdsVanObject(o)), []);
+  for (const id of ids) await verwijderFoto(id);
+  return ids.length;
+}
 function blobNaarDataURL(blob) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); }); }
 async function fotoDataURL(id) { const b = await dbGet('fotos', id); return b ? blobNaarDataURL(b) : null; }
 
@@ -982,16 +999,23 @@ function renderComplex(main) {
   main.appendChild(lijst);
 }
 async function complexMenu(c) {
-  const r = await vraag('Complex bewerken', [{ key: 'nummer', label: 'Complexnummer', value: c.nummer }, { key: 'naam', label: 'Naam', value: c.naam }], 'Opslaan');
-  if (r) { c.nummer = r.nummer || c.nummer; c.naam = r.naam; opslaan(); render(); }
+  const r = await vraag('Complex bewerken', [{ key: 'nummer', label: 'Complexnummer', value: c.nummer }, { key: 'naam', label: 'Naam', value: c.naam }, { key: 'weg', label: 'Complex verwijderen? (typ VERWIJDER)', value: '' }], 'Opslaan');
+  if (!r) return;
+  if (r.weg === 'VERWIJDER') {
+    const objecten = objectenVanComplex(c);
+    const tekst = `Complex ${c.nummer} ${c.naam} met ${(c.blokken || []).length} blok(ken) en ${objecten.length} object(en), inclusief alle punten, foto's en handtekeningen, wordt definitief verwijderd.`;
+    if (await bevestig('Complex verwijderen?', tekst, 'Verwijderen', true)) {
+      await verwijderFotosVanObjecten(objecten);
+      db.complexen = db.complexen.filter(x => x !== c); opslaan(); ga('complexen', { complexId: null, blokId: null, objectId: null }); return;
+    }
+  }
+  c.nummer = r.nummer || c.nummer; c.naam = r.naam; opslaan(); render();
 }
 
 /* --- Blok --- */
 function renderBlok(main) {
   const c = vindComplex(), b = vindBlok(); if (!b) return ga('complex');
-  kop(`${c.nummer} · Blok ${b.naam}`, { tekst: c.nummer, fn: () => ga('complex') }, [{ tekst: '⋯', fn: async () => {
-    const r = await vraag('Blok bewerken', [{ key: 'naam', label: 'Bloknaam', value: b.naam }], 'Opslaan'); if (r && r.naam) { b.naam = r.naam; opslaan(); render(); }
-  } }]);
+  kop(`${c.nummer} · Blok ${b.naam}`, { tekst: c.nummer, fn: () => ga('complex') }, [{ tekst: '⋯', fn: () => blokMenu(c, b) }]);
   const t = blokTellers(b);
   if (t.C > C_LIMIET_BLOK) main.appendChild(h(`<div class="banner geel">⚠️ ${t.C} C-punten in dit blok — meer dan de limiet van ${C_LIMIET_BLOK} per blok.</div>`));
   main.appendChild(h(`<div class="kaart-kop"><h1>Blok ${esc(b.naam)}</h1><button class="knop" id="nieuwObject">+ Object</button></div>`));
@@ -1014,6 +1038,20 @@ function renderBlok(main) {
     r.onclick = () => ga('object', { objectId: o.id, tab: 'gegevens' }); lijst.appendChild(r);
   });
   main.appendChild(lijst);
+}
+
+async function blokMenu(c, b) {
+  const r = await vraag('Blok bewerken', [{ key: 'naam', label: 'Bloknaam', value: b.naam }, { key: 'weg', label: 'Blok verwijderen? (typ VERWIJDER)', value: '' }], 'Opslaan');
+  if (!r) return;
+  if (r.weg === 'VERWIJDER') {
+    const objecten = objectenVanBlok(b);
+    const tekst = `Blok ${b.naam} met ${objecten.length} object(en), inclusief alle punten, foto's en handtekeningen, wordt definitief verwijderd.`;
+    if (await bevestig('Blok verwijderen?', tekst, 'Verwijderen', true)) {
+      await verwijderFotosVanObjecten(objecten);
+      c.blokken = c.blokken.filter(x => x !== b); opslaan(); ga('complex', { blokId: null, objectId: null }); return;
+    }
+  }
+  if (r.naam) b.naam = r.naam; opslaan(); render();
 }
 
 /* --- Object --- */
@@ -1041,10 +1079,8 @@ async function objectMenu(o, b) {
   if (!r) return;
   if (r.weg === 'VERWIJDER') {
     if (await bevestig('Object verwijderen?', `${o.adres} met alle punten, foto's en handtekeningen wordt definitief verwijderd.`, 'Verwijderen', true)) {
-      const ids = []; ['voor', 'oplever'].forEach(k => { o.opnames[k].punten.forEach(p => p.fotoId && ids.push(p.fotoId)); ['koper', 'aannemer'].forEach(x => o.opnames[k].handtekeningen[x] && ids.push(o.opnames[k].handtekeningen[x])); });
-      Object.values(o.meter.fotos).forEach(id => id && ids.push(id));
-      for (const id of ids) await verwijderFoto(id);
-      b.objecten = b.objecten.filter(x => x !== o); opslaan(); ga('blok'); return;
+      await verwijderFotosVanObjecten([o]);
+      b.objecten = b.objecten.filter(x => x !== o); opslaan(); ga('blok', { objectId: null }); return;
     }
   }
   if (r.adres) o.adres = r.adres; o.type = r.type; opslaan(); render();
@@ -1054,10 +1090,15 @@ async function objectMenu(o, b) {
 function tabGegevens(box, o) {
   box.appendChild(h(`<div class="kaart"><h3>Koper / opdrachtgever</h3><p style="margin:6px 0 0">${KOPER.naam}<br>${KOPER.adres}<br>${KOPER.postbus}</p></div>`));
   const k = h(`<div class="kaart"><h3>Partijen</h3><div class="velden" style="margin-top:8px">
-    <div class="veld"><label>Vertegenwoordigd door (koper)</label><input class="invoer" data-k="vertKoper" placeholder="Naam inspecteur / vertegenwoordiger" autocomplete="off"></div>
-    <div class="veld"><label>Verkoper / aannemer</label><input class="invoer" data-k="aannemer" placeholder="Bedrijfsnaam" autocomplete="off"></div>
-    <div class="veld"><label>Vertegenwoordigd door (aannemer)</label><input class="invoer" data-k="vertAannemer" placeholder="Naam uitvoerder / vertegenwoordiger" autocomplete="off"></div></div></div>`);
-  $$('[data-k]', k).forEach(i => { i.value = o[i.dataset.k] || ''; i.oninput = () => { o[i.dataset.k] = i.value; if (i.dataset.k === 'aannemer') db.instellingen.aannemer = i.value; opslaan(); }; });
+    <div class="veld sug-wrap"><label>Vertegenwoordigd door (koper)</label><input class="invoer" data-k="vertKoper" placeholder="Naam inspecteur / vertegenwoordiger" autocomplete="off"></div>
+    <div class="veld sug-wrap"><label>Verkoper / aannemer</label><input class="invoer" data-k="aannemer" placeholder="Bedrijfsnaam" autocomplete="off"></div>
+    <div class="veld sug-wrap"><label>Vertegenwoordigd door (aannemer)</label><input class="invoer" data-k="vertAannemer" placeholder="Naam uitvoerder / vertegenwoordiger" autocomplete="off"></div></div></div>`);
+  $$('[data-k]', k).forEach(i => {
+    const veld = i.dataset.k;
+    const zet = () => { o[veld] = i.value; if (veld === 'aannemer') db.instellingen.aannemer = i.value; opslaan(); };
+    i.value = o[veld] || ''; i.oninput = zet;
+    koppelSuggesties(i, veld, zet, 'object');
+  });
   box.appendChild(k);
   const vo = o.opnames.voor, op = o.opnames.oplever;
   box.appendChild(h(`<div class="kaart"><h3>Opnames</h3><div class="velden" style="margin-top:8px">
@@ -1082,17 +1123,19 @@ function tabOpname(box, o, key) {
     };
     return;
   }
-  const dat = h(`<div class="rijvelden" style="margin-bottom:12px"><div class="veld" style="flex:0 1 220px"><label>Datum ${OPNAMES[key].toLowerCase()}</label><input type="date" class="invoer" value="${op.datum}"></div>
-    <div class="veld" style="flex:1"><label>&nbsp;</label><button class="knop breed" id="nieuwPunt">+ Tekortkoming</button></div></div>`);
+  if (!op.datum) { op.datum = vandaag(); opslaan(); }
+  const dat = h(`<div class="rijvelden" style="margin-bottom:12px"><div class="veld" style="flex:0 1 220px"><label>Datum ${OPNAMES[key].toLowerCase()}</label><input type="date" class="invoer" value="${op.datum}"></div></div>`);
   $('input', dat).onchange = e => { op.datum = e.target.value; opslaan(); };
   box.appendChild(dat);
   const lijst = h(`<div id="puntLijst"></div>`); box.appendChild(lijst);
+  const toevoeg = h(`<div class="knoprij" style="margin:2px 0 14px"><button class="knop breed" id="nieuwPunt">+ Tekortkoming</button></div>`);
   const teken = () => {
     lijst.innerHTML = '';
     if (!op.punten.length) lijst.appendChild(h(`<div class="leeg"><strong>Nog geen tekortkomingen</strong>Tik op “+ Tekortkoming” om een punt met foto toe te voegen.</div>`));
     let nr = 0;
     const open = op.punten.filter(p => p.hersteld !== true), hersteld = op.punten.filter(p => p.hersteld === true);
     open.forEach(p => lijst.appendChild(puntKaart(o, key, p, ++nr, teken)));
+    lijst.appendChild(toevoeg);
     if (hersteld.length) {
       lijst.appendChild(h(`<h3 style="margin:18px 0 8px;color:var(--groen)">Hersteld sinds vooropname (${hersteld.length})</h3>`));
       hersteld.forEach(p => lijst.appendChild(puntKaart(o, key, p, ++nr, teken)));
@@ -1100,7 +1143,7 @@ function tabOpname(box, o, key) {
     // tellers bovenin verversen
     const s = objectStatus(o); $$('.kaart-kop .badges .badge', box.parentElement).forEach(b => { const k = b.className.split(' ')[1]; if (s.t[k] != null) b.textContent = `${k} ${s.t[k]}`; });
   };
-  $('#nieuwPunt', dat).onclick = () => { const p = nieuwPunt(); op.punten.push(p); opslaan(); teken(); const k = $(`[data-punt="${p.id}"]`, lijst); if (k) { k.scrollIntoView({ block: 'center' }); $('input', k).focus(); } };
+  $('#nieuwPunt', toevoeg).onclick = () => { const p = nieuwPunt(); op.punten.push(p); opslaan(); teken(); const k = $(`[data-punt="${p.id}"]`, lijst); if (k) { k.scrollIntoView({ block: 'center' }); $('input', k).focus(); } };
   teken();
 }
 function puntKaart(o, key, p, nr, herteken) {
@@ -1142,11 +1185,11 @@ function ververs(o) { // banners + badges bovenin zonder volledige herrender
   if (s.cOver) anker.parentElement.insertBefore(h(`<div class="banner geel">⚠️ ${s.t.C} C-punten — meer dan het maximum van ${C_LIMIET_OBJECT} per woning.</div>`), anker);
   if (s.t.A > 0) anker.parentElement.insertBefore(h(`<div class="banner rood">⛔ Oplevering kan niet plaatsvinden <small>${s.t.A} A-punt(en) in de ${s.opname.toLowerCase()}.</small></div>`), anker);
 }
-function koppelSuggesties(inp, veld, kies) {
+function koppelSuggesties(inp, veld, kies, bron) {
   const wrap = inp.parentElement; let box = null;
   const sluit = () => { if (box) { box.remove(); box = null; } };
   const toon = () => {
-    sluit(); const s = suggesties(veld, inp.value); if (!s.length) return;
+    sluit(); const s = suggesties(veld, inp.value, bron); if (!s.length) return;
     box = h(`<div class="sug"></div>`);
     s.forEach(v => { const b = h(`<button type="button">${esc(v)}</button>`); b.addEventListener('pointerdown', e => { e.preventDefault(); inp.value = v; kies(v); sluit(); }); box.appendChild(b); });
     wrap.appendChild(box);
