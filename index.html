@@ -122,6 +122,7 @@ main{max-width:var(--breedte);margin:0 auto;padding:16px var(--rand) 60px}
 .veld .hint{font-weight:400;color:var(--grijs);font-size:.85rem}
 .invoer,select.invoer,textarea.invoer{width:100%;min-height:var(--tik);padding:9px 12px;border:1.5px solid var(--lijn);border-radius:8px;
   background:var(--wit);font-size:1rem;-webkit-appearance:none;appearance:none}
+select.invoer{padding-right:38px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' fill='none' stroke='%23667580' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;background-size:14px 9px;cursor:pointer}
 textarea.invoer{min-height:70px;resize:vertical}
 .invoer:focus{outline:none;border-color:var(--lichtblauw);box-shadow:0 0 0 3px rgba(140,186,226,.35)}
 .invoer.klein{min-height:40px;padding:6px 10px}
@@ -719,7 +720,8 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 </script>
 <script>
 /* ===== Opslag (IndexedDB) ===== */
-const APP_VERSIE = '1.2.8';
+const APP_VERSIE = '1.2.9';
+const OBJECT_TYPES = ['Appartement', 'Woning', 'Algemene ruimte', 'Overig'];
 const DB_NAAM = 'opleverinspectie', DB_VERSIE = 1;
 let idb = null;
 function openDB() {
@@ -1550,7 +1552,7 @@ function renderBlok(main) {
   if (cBoven(c, 'blok', t.C)) main.appendChild(h(`<div class="banner geel">⚠️ ${t.C} C-punten in dit blok — meer dan de limiet van ${cLimiet(c, 'blok')} per blok.</div>`));
   main.appendChild(h(`<div class="kaart-kop"><h1 class="kruimels">${kruimelHTML()}</h1><button class="knop" id="nieuwObject">+ Object</button></div>`));
   $('#nieuwObject', main).onclick = async () => {
-    const r = await vraag('Nieuw object', [{ key: 'adres', label: 'Adres', placeholder: 'Straat en huisnummer' }, { key: 'type', label: 'Type', type: 'select', opties: ['Appartement', 'Woning', 'Algemene ruimte'], value: 'Appartement' }]);
+    const r = await vraag('Nieuw object', [{ key: 'adres', label: 'Adres', placeholder: 'Straat en huisnummer' }, { key: 'type', label: 'Type', type: 'select', opties: OBJECT_TYPES, value: 'Appartement' }]);
     if (!r || !r.adres) return; b.objecten.push(nieuwObject(r.adres, r.type)); opslaan(); render();
   };
   const lijst = h(`<div class="lijst"></div>`);
@@ -1611,7 +1613,7 @@ async function objectMenu(o, b) {
     b.objecten = b.objecten.filter(x => x !== o); opslaan(); await nuOpslaan(); await ruimFotosOp(ids);
     return ga('blok', { objectId: null });
   }
-  const r = await vraag('Object bewerken', [{ key: 'adres', label: 'Adres', value: o.adres }, { key: 'type', label: 'Type', type: 'select', opties: ['Appartement', 'Woning', 'Algemene ruimte'], value: o.type }], 'Opslaan', 'Object verwijderen…');
+  const r = await vraag('Object bewerken', [{ key: 'adres', label: 'Adres', value: o.adres }, { key: 'type', label: 'Type', type: 'select', opties: OBJECT_TYPES.includes(o.type) ? OBJECT_TYPES : OBJECT_TYPES.concat(o.type || []), value: o.type }], 'Opslaan', 'Object verwijderen…');
   if (!r) return;
   if (r._verwijder) {
     if (!await bevestig('Object verwijderen?', `${o.adres} met alle punten, foto's en handtekeningen wordt definitief verwijderd.`, 'Verwijderen', true)) return;
@@ -2053,7 +2055,7 @@ async function maakProcesVerbaal(c, b, o, key) {
 
   /* Object, status, datum */
   doc.setFont('RedditSans', 'bold'); tekst('Object van oplevering:', M, y); doc.setFont('RedditSans', 'normal');
-  let x = M + 42; ['Appartement', 'Woning', 'Algemene ruimte'].forEach(tp => { x = vink(x, y, o.type === tp, tp); }); y += 7;
+  let x = M + 42; OBJECT_TYPES.forEach(tp => { x = vink(x, y, o.type === tp, tp); }); y += 7;
   doc.setFont('RedditSans', 'bold'); tekst('Status van opname:', M, y); doc.setFont('RedditSans', 'normal');
   x = M + 42; x = vink(x, y, !isOpl, 'Vooropname'); x = vink(x, y, isOpl, 'Oplevering');
   doc.setFont('RedditSans', 'bold'); tekst('Datum:', x + 4, y); doc.setFont('RedditSans', 'normal'); tekst(fmtDatum(op.datum) || '….-….-……', x + 18, y); y += 9;
@@ -2216,6 +2218,7 @@ function normKop(s) { return String(s || '').trim().toLowerCase().replace(/[^a-z
 function normType(s, standaard) {
   const v = normKop(s); if (!v) return standaard || 'Woning';
   if (v.startsWith('app')) return 'Appartement';
+  if (v.startsWith('ov')) return 'Overig';
   if (v.startsWith('alg') || v.includes('ruimte') || v.startsWith('berg') || v.startsWith('gem')) return 'Algemene ruimte';
   return 'Woning';
 }
