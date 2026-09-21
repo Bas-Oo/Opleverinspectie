@@ -719,7 +719,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 </script>
 <script>
 /* ===== Opslag (IndexedDB) ===== */
-const APP_VERSIE = '1.2.5';
+const APP_VERSIE = '1.2.6';
 const DB_NAAM = 'opleverinspectie', DB_VERSIE = 1;
 let idb = null;
 function openDB() {
@@ -1512,7 +1512,8 @@ function renderComplex(main) {
   main.appendChild(lijst);
   /* M5: standaardgegevens voor alle objecten van dit complex */
   const std = h(`<div class="kaart" style="margin-top:20px"><h3 class="titel-info">Standaardgegevens voor dit complex ${infoKnop('Standaardgegevens voor dit complex', 'Gelden voor alle objecten van dit complex, ook voor geïmporteerde. Een object wijkt alleen af als daar zelf iets anders is ingevuld.')}</h3>
-    <div class="velden" style="margin-top:10px">${STANDAARD_VELDEN.map(([k, l]) => `<div class="veld"><label>${l}</label><input class="invoer" data-s="${k}" autocomplete="off"></div>`).join('')}</div></div>`);
+    ${[STANDAARD_VELDEN.filter(([k]) => !k.startsWith('net')), STANDAARD_VELDEN.filter(([k]) => k.startsWith('net'))].map((groep, i) =>
+      `<div class="velden"${i ? '' : ' style="margin-top:10px"'}>${groep.map(([k, l]) => `<div class="veld"><label>${l}</label><input class="invoer" data-s="${k}" autocomplete="off"></div>`).join('')}</div>`).join('')}</div>`);
   $$('[data-s]', std).forEach(i => { i.value = stdWaarde(c, i.dataset.s); i.oninput = () => { c.standaard[i.dataset.s] = i.value.trim(); opslaan(); }; });
   bindInfo(std); main.appendChild(std);
   /* 1.2.2: waarschuwing restpunten per complex */
@@ -1671,7 +1672,6 @@ function tabOpname(box, o, key) {
   const toevoeg = h(`<div class="knoprij" style="margin:2px 0 14px"><button class="knop breed" id="nieuwPunt">+ Tekortkoming</button></div>`);
   const teken = () => {
     lijst.innerHTML = '';
-    if (!op.punten.length) lijst.appendChild(h(`<div class="leeg"><strong>Nog geen tekortkomingen</strong>Tik op “+ Tekortkoming” om een punt met foto toe te voegen.</div>`));
     let nr = 0;
     const open = op.punten.filter(p => p.hersteld !== true), hersteld = op.punten.filter(p => p.hersteld === true);
     open.forEach(p => lijst.appendChild(puntKaart(o, key, p, ++nr, teken)));
