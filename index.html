@@ -45,6 +45,14 @@ a{color:var(--blauw)}
 .kop-acties button{min-width:var(--tik);min-height:var(--tik);border-radius:8px;padding:0 14px;font-weight:700;
   color:var(--blauw);background:var(--wit);border:1.5px solid var(--lijn)}
 .kop-acties button:active{background:#E4F3FB;border-color:var(--lichtblauw)}
+.kop-acties button.icoon{padding:0;display:inline-flex;align-items:center;justify-content:center}
+.kop-acties button.icoon svg{width:22px;height:22px;display:block}
+/* Info-icoon achter een kaarttitel: tik opent de toelichting */
+.titel-info{display:flex;align-items:center;gap:6px}
+.info-i{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;margin:-8px 0;flex:none}
+.info-i span{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;
+  border:1.5px solid var(--lichtblauw);color:var(--lichtblauw);font-size:.8rem;font-weight:700;font-style:italic;font-family:Georgia,serif;line-height:1}
+.info-i:active span{background:#E4F3FB}
 /* Kruimelpad als paginatitel */
 h1.kruimels{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;min-width:0;font-size:1.25rem;
   min-height:var(--tik)}
@@ -130,7 +138,12 @@ textarea.invoer{min-height:70px;resize:vertical}
 
 /* Tabs */
 .tabs{display:flex;gap:4px;background:var(--wit);border:1px solid var(--lijn);border-radius:12px;padding:4px;margin-bottom:14px;
-  overflow-x:auto;-webkit-overflow-scrolling:touch}
+  overflow-x:auto;-webkit-overflow-scrolling:touch;
+  /* Tabs blijven onder de kop in beeld; de band in achtergrondkleur dekt de inhoud die eronder doorschuift */
+  position:sticky;top:calc(var(--kop-h,72px) + 6px);z-index:16;
+  box-shadow:0 0 0 6px var(--achtergrond),0 12px 12px -6px rgba(29,44,53,.12)}
+/* Velden die focus krijgen niet onder de kop + tabs laten verdwijnen */
+html{scroll-padding-top:calc(var(--kop-h,72px) + 80px)}
 .tabs button{flex:1 0 auto;min-height:var(--tik);padding:0 12px;border-radius:9px;font-weight:700;color:var(--grijs);white-space:nowrap;position:relative}
 .tabs button.aan{background:var(--blauw);color:var(--wit)}
 .tabs button .stip{position:absolute;top:6px;right:8px;width:9px;height:9px;border-radius:50%;background:var(--rood)}
@@ -704,7 +717,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 </script>
 <script>
 /* ===== Opslag (IndexedDB) ===== */
-const APP_VERSIE = '1.2.4';
+const APP_VERSIE = '1.2.5';
 const DB_NAAM = 'opleverinspectie', DB_VERSIE = 1;
 let idb = null;
 function openDB() {
@@ -794,7 +807,7 @@ function leegDB() {
   return { versie: 1, schema: 2, gemaakt: new Date().toISOString(), instellingen: { aannemer: '', netElektra: '', netWater: '' }, complexen: [] };
 }
 /* Standaardgegevens op complexniveau (M5); een object erft ze zolang het eigen veld leeg is */
-const STANDAARD_VELDEN = [['vertKoper', 'Vertegenwoordigd door (koper)'], ['aannemer', 'Verkoper / aannemer'], ['vertAannemer', 'Vertegenwoordigd door (aannemer)'], ['netElektra', 'Netbeheerder elektra'], ['netWater', 'Netbeheerder water']];
+const STANDAARD_VELDEN = [['vertKoper', 'Vertegenwoordiger koper'], ['aannemer', 'Verkoper / aannemer'], ['vertAannemer', 'Vertegenwoordiger aannemer'], ['netElektra', 'Netbeheerder elektra'], ['netWater', 'Netbeheerder water']];
 function nieuwComplex(nummer, naam) { return { id: uid(), nummer, naam, blokken: [], standaard: {}, cLimiet: Object.assign({}, C_LIMIET_STANDAARD) }; }
 const stdWaarde = (c, veld) => ((c && c.standaard && c.standaard[veld]) || '');
 const partij = (o, c, veld) => o[veld] || stdWaarde(c, veld);
@@ -1369,9 +1382,32 @@ function kop(acties) {
     <div class="kop-titel"><div class="app">Opleverinspectie</div><div class="org">Woningstichting Wageningen</div></div>
   </div>`);
   const ac = h(`<div class="kop-acties"></div>`);
-  (acties || []).forEach(a => { const b = h(`<button>${esc(a.tekst)}</button>`); b.onclick = a.fn; ac.appendChild(b); });
+  (acties || []).forEach(a => {
+    const b = a.icoon ? h(`<button class="icoon" title="${esc(a.tekst)}" aria-label="${esc(a.tekst)}">${a.icoon}</button>`) : h(`<button>${esc(a.tekst)}</button>`);
+    b.onclick = a.fn; ac.appendChild(b);
+  });
   rij.appendChild(ac); k.appendChild(rij);
+  zetKopHoogte();
 
+}
+
+/* Hoogte van de kop als CSS-variabele, zodat de tabs van een object er direct onder blijven plakken */
+function zetKopHoogte() { const k = $('#kop'); if (k) document.documentElement.style.setProperty('--kop-h', k.offsetHeight + 'px'); }
+if (window.ResizeObserver) new ResizeObserver(zetKopHoogte).observe(document.getElementById('kop'));
+window.addEventListener('resize', zetKopHoogte);
+const ICOON_OPSLAG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3"/><rect x="7" y="13" width="10" height="8" rx="1"/></svg>`;
+/* Info-icoon achter een kaarttitel; de toelichting opent in een dialoog */
+const infoKnop = (titel, tekst) => `<button class="info-i" data-info-titel="${esc(titel)}" data-info-tekst="${esc(tekst)}" aria-label="Toelichting"><span>i</span></button>`;
+function bindInfo(root) { $$('[data-info-titel]', root).forEach(b => { b.onclick = e => { e.preventDefault(); e.stopPropagation(); meld(b.dataset.infoTitel, b.dataset.infoTekst); }; }); }
+/* Back-up en opslag: toelichting in een dialoog, achter het diskette-icoon in de kop */
+function toonBackupInfo() {
+  const d = h(`<div class="dialoog"><div class="kaart"><h2>Back-up en opslag</h2>
+    <p style="color:var(--grijs);font-size:.95rem;white-space:normal">Alles wordt automatisch op deze tablet opgeslagen, in deze browser en op dit webadres. Een andere browser op dezelfde iPad ziet deze gegevens niet. Maak aan het eind van elke dag een export (JSON met foto's) en bewaar die buiten de tablet. Bij veel foto's: exporteer per complex (knop “Export complex” in het complex). ${db.laatsteExport ? 'Laatste volledige export: ' + new Date(db.laatsteExport).toLocaleString('nl-NL') + '.' : 'Nog geen volledige export gemaakt.'}</p>
+    <p class="opslag-info" style="color:var(--grijs);font-size:.9rem;white-space:normal"></p>
+    <div class="knoprij"><button class="knop" data-a="ok">Sluiten</button></div></div></div>`);
+  d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-a]')) d.remove(); });
+  document.body.appendChild(d);
+  toonOpslagInfo($('.opslag-info', d));
 }
 
 /* Breadcrumb uit de huidige navigatiestand; het laatste kruimeltje is niet klikbaar */
@@ -1400,7 +1436,8 @@ function bindKruimels(root) {
 function renderComplexen(main) {
   kop([
     { tekst: 'Export', fn: () => exportJSON() },
-    { tekst: 'Import', fn: () => $('#importInput').click() }
+    { tekst: 'Import', fn: () => $('#importInput').click() },
+    { tekst: 'Back-up en opslag', icoon: ICOON_OPSLAG, fn: toonBackupInfo }
   ]);
   main.appendChild(h(`<div class="kaart-kop"><h1 class="kruimels">${kruimelHTML()}</h1><button class="knop" id="nieuwComplex">+ Complex</button></div>`));
   $('#nieuwComplex', main).onclick = async () => {
@@ -1421,9 +1458,6 @@ function renderComplexen(main) {
     <div class="knoprij"><button class="knop" id="excelImport">Excel importeren</button><button class="knop licht" id="excelSjabloon">Sjabloon downloaden</button></div></div>`);
   $('#excelImport', ex).onclick = () => $('#excelInput').click(); $('#excelSjabloon', ex).onclick = downloadExcelSjabloon;
   main.appendChild(ex);
-  main.appendChild(h(`<details class="kaart uitklap"><summary><h3>Back-up en opslag</h3></summary><p style="margin:10px 0 0;color:var(--grijs);font-size:.9rem">Alles wordt automatisch op deze tablet opgeslagen, in deze browser en op dit webadres. Een andere browser op dezelfde iPad ziet deze gegevens niet. Maak aan het eind van elke dag een export (JSON met foto's) en bewaar die buiten de tablet. Bij veel foto's: exporteer per complex (knop “Export complex” in het complex). ${db.laatsteExport ? 'Laatste volledige export: ' + new Date(db.laatsteExport).toLocaleString('nl-NL') + '.' : 'Nog geen volledige export gemaakt.'}</p>
-    <p id="opslagInfo" style="margin:8px 0 0;color:var(--grijs);font-size:.9rem"></p></details>`));
-  toonOpslagInfo($('#opslagInfo', main));
 }
 const complexMetNummer = (nummer, behalve) => db.complexen.find(x => x !== behalve && String(x.nummer).trim().toLowerCase() === String(nummer).trim().toLowerCase());
 /* L7: zicht op opslagruimte, bescherming tegen automatisch wissen en offline-beschikbaarheid (K3) */
@@ -1468,22 +1502,20 @@ function renderComplex(main) {
   });
   main.appendChild(lijst);
   /* M5: standaardgegevens voor alle objecten van dit complex */
-  const std = h(`<div class="kaart" style="margin-top:20px"><h3>Standaardgegevens voor dit complex</h3>
-    <p style="margin:6px 0 10px;color:var(--grijs);font-size:.9rem">Gelden voor alle objecten van dit complex, ook voor geïmporteerde. Een object wijkt alleen af als daar zelf iets anders is ingevuld.</p>
-    <div class="velden">${STANDAARD_VELDEN.map(([k, l]) => `<div class="veld"><label>${l}</label><input class="invoer" data-s="${k}" autocomplete="off"></div>`).join('')}</div></div>`);
+  const std = h(`<div class="kaart" style="margin-top:20px"><h3 class="titel-info">Standaardgegevens voor dit complex ${infoKnop('Standaardgegevens voor dit complex', 'Gelden voor alle objecten van dit complex, ook voor geïmporteerde. Een object wijkt alleen af als daar zelf iets anders is ingevuld.')}</h3>
+    <div class="velden" style="margin-top:10px">${STANDAARD_VELDEN.map(([k, l]) => `<div class="veld"><label>${l}</label><input class="invoer" data-s="${k}" autocomplete="off"></div>`).join('')}</div></div>`);
   $$('[data-s]', std).forEach(i => { i.value = stdWaarde(c, i.dataset.s); i.oninput = () => { c.standaard[i.dataset.s] = i.value.trim(); opslaan(); }; });
-  main.appendChild(std);
+  bindInfo(std); main.appendChild(std);
   /* 1.2.2: waarschuwing restpunten per complex */
-  const lim = h(`<div class="kaart"><h3>Waarschuwing restpunten (C)</h3>
-    <p style="margin:6px 0 10px;color:var(--grijs);font-size:.9rem">De app waarschuwt als een woning of blok meer C-punten heeft dan hier ingesteld. Leeg laten = geen waarschuwing op dat niveau.</p>
-    <div class="velden"><div class="veld"><label>Max. C-punten per woning</label><input class="invoer" data-l="object" inputmode="numeric" pattern="[0-9]*" placeholder="geen waarschuwing" autocomplete="off"></div>
+  const lim = h(`<div class="kaart"><h3 class="titel-info">Waarschuwing restpunten (C) ${infoKnop('Waarschuwing restpunten (C)', 'De app waarschuwt als een woning of blok meer C-punten heeft dan hier ingesteld. Leeg laten = geen waarschuwing op dat niveau.')}</h3>
+    <div class="velden" style="margin-top:10px"><div class="veld"><label>Max. C-punten per woning</label><input class="invoer" data-l="object" inputmode="numeric" pattern="[0-9]*" placeholder="geen waarschuwing" autocomplete="off"></div>
     <div class="veld"><label>Max. C-punten per blok</label><input class="invoer" data-l="blok" inputmode="numeric" pattern="[0-9]*" placeholder="geen waarschuwing" autocomplete="off"></div></div></div>`);
   $$('[data-l]', lim).forEach(i => {
     const v = c.cLimiet[i.dataset.l]; i.value = v === '' || v == null ? '' : String(v);
     i.oninput = () => { i.value = i.value.replace(/[^0-9]/g, ''); c.cLimiet[i.dataset.l] = i.value === '' ? '' : parseInt(i.value, 10); opslaan(); };
     i.onchange = () => render();   // badges in de bloklijst bijwerken na het verlaten van het veld
   });
-  main.appendChild(lim);
+  bindInfo(lim); main.appendChild(lim);
   main.appendChild(h(`<div class="status-lijn" style="margin-top:0">${c.laatsteExport ? 'Laatste export van dit complex: ' + new Date(c.laatsteExport).toLocaleString('nl-NL') : 'Van dit complex is nog geen export gemaakt.'}</div>`));
 }
 async function complexMenu(c) {
@@ -1582,9 +1614,9 @@ async function objectMenu(o, b) {
 function tabGegevens(box, o) {
   box.appendChild(h(`<div class="kaart"><h3>Koper / opdrachtgever</h3><p style="margin:6px 0 0">${KOPER.naam}<br>${KOPER.adres}<br>${KOPER.postbus}</p></div>`));
   const k = h(`<div class="kaart"><h3>Partijen</h3><div class="velden" style="margin-top:8px">
-    <div class="veld sug-wrap"><label>Vertegenwoordigd door (koper)</label><input class="invoer" data-k="vertKoper" placeholder="Naam inspecteur / vertegenwoordiger" autocomplete="off"></div>
+    <div class="veld sug-wrap"><label>Vertegenwoordiger koper</label><input class="invoer" data-k="vertKoper" placeholder="Naam inspecteur / vertegenwoordiger" autocomplete="off"></div>
     <div class="veld sug-wrap"><label>Verkoper / aannemer</label><input class="invoer" data-k="aannemer" placeholder="Bedrijfsnaam" autocomplete="off"></div>
-    <div class="veld sug-wrap"><label>Vertegenwoordigd door (aannemer)</label><input class="invoer" data-k="vertAannemer" placeholder="Naam uitvoerder / vertegenwoordiger" autocomplete="off"></div></div></div>`);
+    <div class="veld sug-wrap"><label>Vertegenwoordiger aannemer</label><input class="invoer" data-k="vertAannemer" placeholder="Naam uitvoerder / vertegenwoordiger" autocomplete="off"></div></div></div>`);
   const c = vindComplex();
   $$('[data-k]', k).forEach(i => {
     const veld = i.dataset.k, std = stdWaarde(c, veld);
@@ -1608,10 +1640,9 @@ function tabOpname(box, o, key) {
   const op = o.opnames[key];
   if (key === 'oplever' && !op.gestart) {
     const nVoor = o.opnames.voor.punten.length;
-    box.appendChild(h(`<div class="kaart"><h2>Oplevering starten</h2><p>Bij het starten worden alle ${nVoor} punt(en) uit de vooropname overgenomen. Per punt geef je aan of het hersteld is. Nieuwe punten kun je toevoegen.</p>
-      <div class="knoprij"><button class="knop" id="start">Oplevering starten</button></div></div>`));
+    box.appendChild(h(`<div class="knoprij"><button class="knop" id="start">Oplevering starten</button></div>`));
     $('#start', box).onclick = async () => {
-      if (!await bevestig('Oplevering starten?', `De ${nVoor} vooropnamepunten worden overgenomen. De vooropname blijft bewaard.`, 'Starten')) return;
+      if (!await bevestig('Oplevering starten?', `De ${nVoor} vooropnamepunt(en) worden overgenomen; per punt geef je aan of het hersteld is. De vooropname blijft bewaard.`, 'Starten')) return;
       op.gestart = true; op.datum = op.datum || vandaag();
       // De foto wordt gedeeld met de vooropname (zelfde fotoId, zie fotoGebruik); een paraaf geldt alleen voor de opname waarin hij is gezet
       op.punten = o.opnames.voor.punten.map(p => Object.assign({}, p, { id: uid(), uitVooropname: true, bronId: p.id, hersteld: null, paraaf: false }));
