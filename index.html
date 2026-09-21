@@ -176,7 +176,7 @@ textarea.invoer{min-height:70px;resize:vertical}
 /* Suggesties */
 .sug-wrap{position:relative}
 .sug{position:absolute;left:0;right:0;top:100%;z-index:15;background:var(--wit);border:1px solid var(--lijn);border-radius:10px;
-  box-shadow:0 8px 24px rgba(29,44,53,.18);max-height:240px;overflow-y:auto;margin-top:4px}
+  box-shadow:0 8px 24px rgba(29,44,53,.18);max-height:320px;overflow-y:auto;margin-top:4px}
 .sug button{display:block;width:100%;text-align:left;min-height:var(--tik);padding:10px 14px;border-bottom:1px solid var(--lijn)}
 .sug button:last-child{border-bottom:0}
 .sug button:active{background:#E4F3FB}
@@ -185,6 +185,17 @@ textarea.invoer{min-height:70px;resize:vertical}
 .meter{display:flex;gap:12px;align-items:center;background:var(--wit);border:1px solid var(--lijn);border-radius:12px;padding:12px;margin-bottom:10px}
 .meter .veld{flex:1;margin:0}
 .meter .invoer{font-size:1.2rem;font-variant-numeric:tabular-nums}
+
+/* Overige zaken */
+.oz-rij{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--lijn);flex-wrap:wrap}
+.oz-rij:last-child{border-bottom:0}
+.oz-rij .oz-label{flex:1 1 220px;font-weight:700}
+.oz-rij .keuze{flex:0 1 auto}
+.oz-rij .keuze button{min-width:78px;flex:0 0 auto}
+.teller{display:flex;align-items:center;gap:8px}
+.teller button{min-width:var(--tik);min-height:var(--tik);border-radius:10px;border:2px solid var(--lijn);background:var(--wit);font-weight:700;font-size:1.2rem}
+.teller .invoer{width:84px;text-align:center;font-size:1.1rem;font-variant-numeric:tabular-nums}
+.afr-kop{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
 
 /* Handtekeningen */
 .hand{margin-bottom:16px}
@@ -674,7 +685,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 </script>
 <script>
 /* ===== Opslag (IndexedDB) ===== */
-const APP_VERSIE = '1.1.0';
+const APP_VERSIE = '1.2.2';
 const DB_NAAM = 'opleverinspectie', DB_VERSIE = 1;
 let idb = null;
 function openDB() {
@@ -719,14 +730,37 @@ const KOPER = { naam: 'De Woningstichting Wageningen', adres: 'Buurtseweg 3', po
 const URGENTIE = {
   A: { titel: 'Blokkerend', uitleg: 'Verhindert veilig gebruik, verhuur of ingebruikname. Oplevering kan niet plaatsvinden.' },
   B: { titel: 'Herstel vóór oplevering', uitleg: 'Functionele tekortkoming, geen directe belemmering van veiligheid.' },
-  C: { titel: 'Restpunt', uitleg: 'Cosmetisch of afwerkingspunt. Max. 3 per woning / 5 per blok.' }
+  C: { titel: 'Restpunt', uitleg: 'Cosmetisch of afwerkingspunt.' }
 };
-const C_LIMIET_OBJECT = 3, C_LIMIET_BLOK = 5;
+/* 1.2.2: de waarschuwing voor restpunten (C) is per complex instelbaar; leeg = geen waarschuwing op dat niveau */
+const C_LIMIET_STANDAARD = { object: 3, blok: 5 };
+function cLimiet(c, niveau) {
+  const v = c && c.cLimiet ? c.cLimiet[niveau] : C_LIMIET_STANDAARD[niveau];
+  if (v === '' || v == null) return null;
+  const n = parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? n : null;
+}
+const cBoven = (c, niveau, aantal) => { const l = cLimiet(c, niveau); return l !== null && aantal > l; };
 const METERS = [
   ['elLaagGel', 'Elektra laag geleverd'], ['elLaagTerug', 'Elektra laag teruggeleverd'],
   ['elHoogGel', 'Elektra hoog geleverd'], ['elHoogTerug', 'Elektra hoog teruggeleverd'], ['water', 'Water']
 ];
 const OPNAMES = { voor: 'Vooropname', oplever: 'Oplevering' };
+/* Vaste suggesties voor het veld Ruimte, in looproute-volgorde; eerder ingevoerde andere ruimtes komen erachter */
+const STANDAARD_RUIMTES = ['Hal', 'Woonkamer', 'Keuken', 'Slaapkamer 1', 'Badkamer', 'Technische ruimte', 'Toilet', 'Slaapkamer 2', 'Slaapkamer 3', 'Overloop'];
+/* Overige zaken: [sleutel, label, soort]; soort 'aantal' = getal, 'jn' = ja/nee, 'jnn' = ja/nee/niet van toepassing */
+const OVERIGE_ZAKEN = [
+  ['sleutels', 'Sleutels (aantal)', 'aantal'],
+  ['raamsleutels', 'Raamsleutels compleet', 'jnn'],
+  ['groepenkast', 'Groepenkastkaart gesealed aanwezig', 'jn'],
+  ['screens', 'Bediening screens aanwezig', 'jnn'],
+  ['dakluik', 'Bediening dakluik aanwezig', 'jnn'],
+  ['wp', 'Inregelrapport warmtepomp', 'jnn'],
+  ['wtw', 'Inregelrapport WTW', 'jnn'],
+  ['elektra', 'Testrapport elektra', 'jn']
+];
+const OZ_WAARDE = { ja: 'Ja', nee: 'Nee', nvt: 'Niet van toepassing' };
+const nieuwOverig = () => Object.assign(Object.fromEntries(OVERIGE_ZAKEN.map(([k]) => [k, ''])), { overig: '' });
+const overigIngevuld = o => !!(o.overig && Object.values(o.overig).some(v => String(v || '').trim()));
 
 let db = null;           // hele dataset
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -740,7 +774,7 @@ function leegDB() {
 }
 /* Standaardgegevens op complexniveau (M5); een object erft ze zolang het eigen veld leeg is */
 const STANDAARD_VELDEN = [['vertKoper', 'Vertegenwoordigd door (koper)'], ['aannemer', 'Verkoper / aannemer'], ['vertAannemer', 'Vertegenwoordigd door (aannemer)'], ['netElektra', 'Netbeheerder elektra'], ['netWater', 'Netbeheerder water']];
-function nieuwComplex(nummer, naam) { return { id: uid(), nummer, naam, blokken: [], standaard: {} }; }
+function nieuwComplex(nummer, naam) { return { id: uid(), nummer, naam, blokken: [], standaard: {}, cLimiet: Object.assign({}, C_LIMIET_STANDAARD) }; }
 const stdWaarde = (c, veld) => ((c && c.standaard && c.standaard[veld]) || '');
 const partij = (o, c, veld) => o[veld] || stdWaarde(c, veld);
 const meterNet = (o, c, veld) => o.meter[veld] || stdWaarde(c, veld);
@@ -753,7 +787,8 @@ function nieuwObject(adres, type) {
       voor: nieuweOpname(),
       oplever: Object.assign(nieuweOpname(), { gestart: false, datum: '' })
     },
-    meter: { datum: '', netElektra: '', netWater: '', door: '', standen: {}, fotos: {} },
+    meter: { datum: '', netElektra: '', netWater: '', door: '', standen: {}, fotos: {}, nvt: false },
+    overig: nieuwOverig(),
     gemaakt: new Date().toISOString(), gewijzigd: ''
   };
 }
@@ -775,6 +810,7 @@ function normaliseerDB(d) {
     if (!c.id) c.id = uid();
     if (!Array.isArray(c.blokken)) c.blokken = [];
     if (!c.standaard) c.standaard = {};
+    if (!c.cLimiet) c.cLimiet = Object.assign({}, C_LIMIET_STANDAARD);   // 1.2.2: bestaande complexen houden 3 / 5
     c.nummer = String(c.nummer == null ? '' : c.nummer); c.naam = c.naam || '';
     c.blokken.forEach(b => {
       if (!b.id) b.id = uid();
@@ -790,6 +826,9 @@ function normaliseerDB(d) {
         o.opnames.oplever.gestart = !!o.opnames.oplever.gestart;
         o.meter = Object.assign({ datum: '', netElektra: '', netWater: '', door: '', standen: {}, fotos: {} }, o.meter || {});
         if (!o.meter.standen) o.meter.standen = {}; if (!o.meter.fotos) o.meter.fotos = {};
+        o.meter.nvt = !!o.meter.nvt;                                  // 1.2: meterstanden optioneel
+        o.overig = Object.assign(nieuwOverig(), o.overig || {});      // 1.2: overige zaken
+        if (afgerond(o) && !o.afgerond) zetAfgerondVast(o, c);        // 1.2.1: eerder afgeronde objecten ook vastzetten
         // Migratie H3: tot schema 2 kreeg elke opname bij aanmaken de datum van die dag. Zonder punten en handtekening is die datum betekenisloos.
         const vo = o.opnames.voor;
         if (migreerH3 && !vo.punten.length && !vo.handtekeningen.koper && !vo.handtekeningen.aannemer && !o.opnames.oplever.gestart) vo.datum = '';
@@ -849,9 +888,20 @@ function tellers(opname) {
   return t;
 }
 function actueleOpname(o) { return o.opnames.oplever.gestart ? 'oplever' : 'voor'; }
-/* H2: een opname is alleen-lezen zodra er een handtekening onder staat; de vooropname ook zodra de oplevering is gestart */
+/* H2: de oplevering is alleen-lezen zodra er een handtekening onder staat; de vooropname zodra de oplevering is gestart.
+   1.2: een vooropname wordt niet ondertekend of geparafeerd; eventuele oude handtekeningen onder een vooropname tellen niet meer mee. */
 const getekend = (o, key) => { const ht = o.opnames[key].handtekeningen; return !!(ht.koper || ht.aannemer); };
-const vergrendeld = (o, key) => getekend(o, key) || (key === 'voor' && o.opnames.oplever.gestart);
+const ondertekend = (o, key) => key === 'oplever' && getekend(o, key);
+const vergrendeld = (o, key) => key === 'voor' ? o.opnames.oplever.gestart : getekend(o, key);
+/* 1.2.1: met beide handtekeningen onder de oplevering is het object definitief afgerond. Dan is niets meer te wijzigen
+   (ook geen handtekening verwijderen, meterstanden, overige zaken of gegevens); alleen de PDF kan nog worden gemaakt. */
+const afgerond = o => { const op = o.opnames.oplever, ht = op.handtekeningen; return !!(op.gestart && ht.koper && ht.aannemer); };
+/* Bij afronden de van het complex overgenomen gegevens vastzetten op het object, zodat de PDF later niet verandert */
+function zetAfgerondVast(o, c) {
+  ['vertKoper', 'aannemer', 'vertAannemer'].forEach(v => { if (!o[v]) o[v] = stdWaarde(c, v); });
+  ['netElektra', 'netWater'].forEach(v => { if (!o.meter[v]) o.meter[v] = stdWaarde(c, v); });
+  o.afgerond = new Date().toISOString();
+}
 /* Aandachtspunten vóór ondertekenen / in de PDF */
 function aandachtspunten(o, key) {
   const op = o.opnames[key], t = tellers(op), uit = [];
@@ -861,6 +911,10 @@ function aandachtspunten(o, key) {
   if (t.zonderUrg) uit.push(`${t.zonderUrg} punt(en) zonder urgentie`);
   const leeg = op.punten.filter(p => !p.ruimte && !p.omschrijving).length;
   if (leeg) uit.push(`${leeg} leeg punt (zonder ruimte en omschrijving)`);
+  if (key === 'oplever') {
+    const oz = o.overig || {}, open = OVERIGE_ZAKEN.filter(([k]) => !String(oz[k] || '').trim()).length;
+    if (open) uit.push(`Overige zaken: ${open} van ${OVERIGE_ZAKEN.length} onderdelen nog niet ingevuld`);
+  }
   return uit;
 }
 /* M8: de oplevering kan worden teruggedraaid zolang er niets aan is veranderd */
@@ -872,16 +926,17 @@ function opleverOngewijzigd(o) {
     return s && p.uitVooropname && p.hersteld === null && !p.paraaf && ['ruimte', 'omschrijving', 'urgentie', 'nietErkend', 'fotoId'].every(k => p[k] === s[k]);
   });
 }
-function objectStatus(o) {
+function objectStatus(o, c) {
+  if (c === undefined) c = vindComplex();
   const key = actueleOpname(o);
   const t = tellers(o.opnames[key]);
   const ht = o.opnames[key].handtekeningen;
   return {
     opnameKey: key, opname: OPNAMES[key], t,
     opleverbaar: t.A === 0,
-    cOver: t.C > C_LIMIET_OBJECT,
-    ondertekend: !!(ht.koper && ht.aannemer),
-    deelsOndertekend: !!(ht.koper || ht.aannemer),
+    cOver: cBoven(c, 'object', t.C),
+    ondertekend: key === 'oplever' && !!(ht.koper && ht.aannemer),
+    deelsOndertekend: key === 'oplever' && !!(ht.koper || ht.aannemer),
     gestart: o.opnames.voor.punten.length > 0 || !!o.opnames.voor.datum || getekend(o, 'voor') || o.opnames.oplever.gestart
   };
 }
@@ -891,6 +946,9 @@ function blokTellers(b) {
   return t;
 }
 
+/* A/B/C-badges; alleen de urgenties met minstens één punt worden getoond */
+const abcBadges = t => ['A', 'B', 'C'].filter(u => t[u] > 0).map(u => `<span class="badge ${u}">${u} ${t[u]}</span>`).join('');
+
 /* Suggesties: eerder ingevoerde waarden binnen het complex */
 function suggesties(veld, tekst, bron) {
   const c = vindComplex(); if (!c) return [];
@@ -899,9 +957,13 @@ function suggesties(veld, tekst, bron) {
   if (bron === 'object') c.blokken.forEach(b => b.objecten.forEach(o => tel(o[veld])));
   else c.blokken.forEach(b => b.objecten.forEach(o => ['voor', 'oplever'].forEach(k => o.opnames[k].punten.forEach(p => tel(p[veld])))));
   const q = (tekst || '').trim().toLowerCase();
-  return Array.from(freq.values())
-    .filter(e => !q || (e.v.toLowerCase().includes(q) && e.v.toLowerCase() !== q))
-    .sort((a, b) => b.n - a.n || a.v.localeCompare(b.v)).slice(0, 8).map(e => e.v);
+  const past = v => !q || (v.toLowerCase().includes(q) && v.toLowerCase() !== q);
+  const eerder = Array.from(freq.values()).sort((a, b) => b.n - a.n || a.v.localeCompare(b.v));
+  if (veld === 'ruimte') { // vaste lijst altijd in deze volgorde, daarna eerder ingevoerde andere ruimtes
+    const vast = new Set(STANDAARD_RUIMTES.map(v => v.toLowerCase()));
+    return STANDAARD_RUIMTES.filter(past).concat(eerder.filter(e => !vast.has(e.v.toLowerCase()) && past(e.v)).slice(0, 8).map(e => e.v));
+  }
+  return eerder.filter(e => past(e.v)).slice(0, 8).map(e => e.v);
 }
 
 /* ===== Toast, dialogen ===== */
@@ -1169,7 +1231,7 @@ async function openBackup(file) {
 /* M6: samenvoegen. Complex op id of nummer, blok op id of naam, object op id of adres; per object wint de nieuwste 'gewijzigd'. */
 function planSamenvoegen(inkomend) {
   const sleutel = s => String(s == null ? '' : s).trim().toLowerCase();
-  const inhoud = o => !!(o.opnames.voor.punten.length || o.opnames.oplever.gestart || getekend(o, 'voor') || Object.values(o.meter.standen).some(Boolean) || Object.values(o.meter.fotos).some(Boolean));
+  const inhoud = o => !!(o.opnames.voor.punten.length || o.opnames.oplever.gestart || getekend(o, 'voor') || Object.values(o.meter.standen).some(Boolean) || Object.values(o.meter.fotos).some(Boolean) || overigIngevuld(o));
   const plan = { n: { complexen: 0, blokken: 0, nieuw: 0, bijgewerkt: 0, behouden: 0, conflict: 0 }, acties: [], nodig: new Set(), weg: new Set() };
   const neemFotos = o => fotoIdsVanObject(o).forEach(id => plan.nodig.add(id));
   inkomend.complexen.forEach(ic => {
@@ -1377,11 +1439,11 @@ function renderComplex(main) {
   if (!c.blokken.length) lijst.appendChild(h(`<div class="leeg"><strong>Nog geen blokken</strong>Voeg een blok toe; daarin komen de woningen en algemene ruimten.</div>`));
   c.blokken.forEach(b => {
     const t = blokTellers(b);
-    const cWaarsch = t.C > C_LIMIET_BLOK ? `<span class="badge waarsch">C &gt; ${C_LIMIET_BLOK}</span>` : '';
+    const cWaarsch = cBoven(c, 'blok', t.C) ? `<span class="badge waarsch">C &gt; ${cLimiet(c, 'blok')}</span>` : '';
     const r = h(`<button class="rij"><div class="rij-hoofd"><div class="rij-titel">Blok ${esc(b.naam)}</div>
       <div class="rij-sub">${t.objecten} object(en) · ${t.klaar} ondertekend opgeleverd${t.nietOpleverbaar ? ' · ' + t.nietOpleverbaar + ' niet opleverbaar' : ''}</div>
       <div class="voortgang"><div style="width:${t.objecten ? Math.round(100 * t.klaar / t.objecten) : 0}%"></div></div></div>
-      <div class="badges"><span class="badge A">A ${t.A}</span><span class="badge B">B ${t.B}</span><span class="badge C">C ${t.C}</span>${cWaarsch}</div><span class="chev">›</span></button>`);
+      <div class="badges">${abcBadges(t)}${cWaarsch}</div><span class="chev">›</span></button>`);
     r.onclick = () => ga('blok', { blokId: b.id }); lijst.appendChild(r);
   });
   main.appendChild(lijst);
@@ -1391,6 +1453,17 @@ function renderComplex(main) {
     <div class="velden">${STANDAARD_VELDEN.map(([k, l]) => `<div class="veld"><label>${l}</label><input class="invoer" data-s="${k}" autocomplete="off"></div>`).join('')}</div></div>`);
   $$('[data-s]', std).forEach(i => { i.value = stdWaarde(c, i.dataset.s); i.oninput = () => { c.standaard[i.dataset.s] = i.value.trim(); opslaan(); }; });
   main.appendChild(std);
+  /* 1.2.2: waarschuwing restpunten per complex */
+  const lim = h(`<div class="kaart"><h3>Waarschuwing restpunten (C)</h3>
+    <p style="margin:6px 0 10px;color:var(--grijs);font-size:.9rem">De app waarschuwt als een woning of blok meer C-punten heeft dan hier ingesteld. Leeg laten = geen waarschuwing op dat niveau.</p>
+    <div class="velden"><div class="veld"><label>Max. C-punten per woning</label><input class="invoer" data-l="object" inputmode="numeric" pattern="[0-9]*" placeholder="geen waarschuwing" autocomplete="off"></div>
+    <div class="veld"><label>Max. C-punten per blok</label><input class="invoer" data-l="blok" inputmode="numeric" pattern="[0-9]*" placeholder="geen waarschuwing" autocomplete="off"></div></div></div>`);
+  $$('[data-l]', lim).forEach(i => {
+    const v = c.cLimiet[i.dataset.l]; i.value = v === '' || v == null ? '' : String(v);
+    i.oninput = () => { i.value = i.value.replace(/[^0-9]/g, ''); c.cLimiet[i.dataset.l] = i.value === '' ? '' : parseInt(i.value, 10); opslaan(); };
+    i.onchange = () => render();   // badges in de bloklijst bijwerken na het verlaten van het veld
+  });
+  main.appendChild(lim);
   main.appendChild(h(`<div class="status-lijn" style="margin-top:0">${c.laatsteExport ? 'Laatste export van dit complex: ' + new Date(c.laatsteExport).toLocaleString('nl-NL') : 'Van dit complex is nog geen export gemaakt.'}</div>`));
 }
 async function complexMenu(c) {
@@ -1412,7 +1485,7 @@ function renderBlok(main) {
   const c = vindComplex(), b = vindBlok(); if (!b) return ga('complex');
   kop([{ tekst: 'Bewerken', fn: () => blokMenu(c, b) }]);
   const t = blokTellers(b);
-  if (t.C > C_LIMIET_BLOK) main.appendChild(h(`<div class="banner geel">⚠️ ${t.C} C-punten in dit blok — meer dan de limiet van ${C_LIMIET_BLOK} per blok.</div>`));
+  if (cBoven(c, 'blok', t.C)) main.appendChild(h(`<div class="banner geel">⚠️ ${t.C} C-punten in dit blok — meer dan de limiet van ${cLimiet(c, 'blok')} per blok.</div>`));
   main.appendChild(h(`<div class="kaart-kop"><h1 class="kruimels">${kruimelHTML()}</h1><button class="knop" id="nieuwObject">+ Object</button></div>`));
   $('#nieuwObject', main).onclick = async () => {
     const r = await vraag('Nieuw object', [{ key: 'adres', label: 'Adres', placeholder: 'Straat en huisnummer' }, { key: 'type', label: 'Type', type: 'select', opties: ['Appartement', 'Woning', 'Algemene ruimte'], value: 'Appartement' }]);
@@ -1425,10 +1498,10 @@ function renderBlok(main) {
     const fase = !s.gestart ? '<span class="badge leeg">nog niet gestart</span>' : `<span class="badge stil">${s.opname}</span>`;
     const opl = s.gestart ? (s.opleverbaar ? '<span class="badge ok">opleverbaar</span>' : '<span class="badge nee">niet opleverbaar</span>') : '';
     const ond = s.ondertekend ? '<span class="badge ok">✓ ondertekend</span>' : (s.deelsOndertekend ? '<span class="badge waarsch">½ ondertekend</span>' : '');
-    const cW = s.cOver ? `<span class="badge waarsch">C &gt; ${C_LIMIET_OBJECT}</span>` : '';
+    const cW = s.cOver ? `<span class="badge waarsch">C &gt; ${cLimiet(c, 'object')}</span>` : '';
     const r = h(`<button class="rij"><div class="rij-hoofd"><div class="rij-titel">${esc(o.adres)}</div><div class="rij-sub">${esc(o.type)}</div>
       <div class="badges" style="margin-top:6px">${fase}${opl}${ond}${cW}</div></div>
-      <div class="badges"><span class="badge A">A ${s.t.A}</span><span class="badge B">B ${s.t.B}</span><span class="badge C">C ${s.t.C}</span></div><span class="chev">›</span></button>`);
+      <div class="badges">${abcBadges(s.t)}</div><span class="chev">›</span></button>`);
     r.onclick = () => ga('object', { objectId: o.id, tab: 'gegevens' }); lijst.appendChild(r);
   });
   main.appendChild(lijst);
@@ -1448,24 +1521,32 @@ async function blokMenu(c, b) {
 }
 
 /* --- Object --- */
-const TABS = [['gegevens', 'Gegevens'], ['voor', 'Vooropname'], ['oplever', 'Oplevering'], ['meter', 'Meterstanden'], ['onderteken', 'Ondertekening'], ['pdf', 'PDF']];
+const TABS = [['gegevens', 'Gegevens'], ['voor', 'Vooropname'], ['oplever', 'Oplevering'], ['meter', 'Meterstanden'], ['overig', 'Overige zaken'], ['afronden', 'Afronden']];
 function renderObject(main) {
   const c = vindComplex(), b = vindBlok(), o = vindObject(); if (!o) return ga('blok');
   kop([{ tekst: 'Bewerken', fn: () => objectMenu(o, b) }]);
   const s = objectStatus(o);
   main.appendChild(h(`<div class="kaart-kop" style="margin-bottom:6px"><h1 class="kruimels">${kruimelHTML()}</h1>
-    <div class="badges"><span class="badge A">A ${s.t.A}</span><span class="badge B">B ${s.t.B}</span><span class="badge C">C ${s.t.C}</span></div></div>`));
+    <div class="badges" id="objBadges">${abcBadges(s.t)}</div></div>`));
   const tabs = h(`<div class="tabs"></div>`);
   TABS.forEach(([k, l]) => {
     const bt = h(`<button class="${nav.tab === k ? 'aan' : ''}" data-tab="${k}">${l}</button>`);
-    bt.onclick = () => { nav.tab = k; if (k === 'onderteken') nav.opname = actueleOpname(o); render(); }; tabs.appendChild(bt); // ondertekening opent op de lopende opname
+    bt.onclick = () => { nav.tab = k; render(); }; tabs.appendChild(bt);
   });
   main.appendChild(tabs);
   ververs(o);
   const inhoud = h(`<div></div>`); main.appendChild(inhoud);
-  ({ gegevens: tabGegevens, voor: () => tabOpname(inhoud, o, 'voor'), oplever: () => tabOpname(inhoud, o, 'oplever'), meter: tabMeter, onderteken: tabOnderteken, pdf: tabPDF })[nav.tab](inhoud, o);
+  ({ gegevens: tabGegevens, voor: () => tabOpname(inhoud, o, 'voor'), oplever: () => tabOpname(inhoud, o, 'oplever'), meter: tabMeter, overig: tabOverig, afronden: tabAfronden })[nav.tab](inhoud, o);
 }
 async function objectMenu(o, b) {
+  if (afgerond(o)) {
+    const k = await kies('Object afgerond', `De oplevering van ${o.adres} is ondertekend; adres en type zijn niet meer te wijzigen.`, [{ a: 'nee', tekst: 'Sluiten', klasse: 'licht' }, { a: 'weg', tekst: 'Object verwijderen…', klasse: 'gevaar' }]);
+    if (k !== 'weg') return;
+    if (!await bevestig('Afgerond object verwijderen?', `${o.adres} is ondertekend opgeleverd. Het object wordt met alle punten, foto's en handtekeningen definitief verwijderd. Bewaar eerst de PDF en maak een export.`, 'Verwijderen', true)) return;
+    const ids = fotoIdsVanObjecten([o]);
+    b.objecten = b.objecten.filter(x => x !== o); opslaan(); await nuOpslaan(); await ruimFotosOp(ids);
+    return ga('blok', { objectId: null });
+  }
   const r = await vraag('Object bewerken', [{ key: 'adres', label: 'Adres', value: o.adres }, { key: 'type', label: 'Type', type: 'select', opties: ['Appartement', 'Woning', 'Algemene ruimte'], value: o.type }], 'Opslaan', 'Object verwijderen…');
   if (!r) return;
   if (r._verwijder) {
@@ -1505,6 +1586,7 @@ function tabGegevens(box, o) {
     <div class="veld"><label>Datum oplevering</label><input type="date" class="invoer" id="dOpl" value="${op.datum}" ${op.gestart ? '' : 'disabled'}><span class="hint">${op.gestart ? '' : 'Wordt gezet bij het starten van de oplevering.'}</span></div></div></div>`));
   $('#dVoor', box).onchange = e => { vo.datum = e.target.value; opslaan(); };
   $('#dOpl', box).onchange = e => { op.datum = e.target.value; opslaan(); };
+  if (afgerond(o)) { $$('input,button', box).forEach(x => { x.disabled = true; }); $$('.hint', k).forEach(x => x.remove()); }
 }
 
 /* Tab: opname (vooropname / oplevering) */
@@ -1524,7 +1606,7 @@ function tabOpname(box, o, key) {
     return;
   }
   const slot = vergrendeld(o, key);
-  if (slot) box.appendChild(h(`<div class="banner blauw" style="display:block">🔒 ${getekend(o, key) ? 'Deze opname is ondertekend en daarom alleen-lezen.' : 'De oplevering is gestart; de vooropname is afgesloten.'}<small>${getekend(o, key) ? 'Verwijder de handtekening(en) op het tabblad Ondertekening om te wijzigen.' : (opleverOngewijzigd(o) ? 'Wijzigen kan nog door de oplevering ongedaan te maken (tabblad Oplevering, onderaan).' : 'Nieuwe of gewijzigde punten leg je vast in de oplevering.')}</small></div>`));
+  if (slot) box.appendChild(h(`<div class="banner blauw" style="display:block">🔒 ${ondertekend(o, key) ? 'Deze opname is ondertekend en daarom alleen-lezen.' : 'De oplevering is gestart; de vooropname is afgesloten.'}<small>${ondertekend(o, key) ? 'Verwijder de handtekening(en) op het tabblad Afronden om te wijzigen.' : (opleverOngewijzigd(o) ? 'Wijzigen kan nog door de oplevering ongedaan te maken (tabblad Oplevering, onderaan).' : 'Nieuwe of gewijzigde punten leg je vast in de oplevering.')}</small></div>`));
   const dat = h(`<div class="rijvelden" style="margin-bottom:12px"><div class="veld" style="flex:0 1 220px"><label>Datum ${OPNAMES[key].toLowerCase()}</label><input type="date" class="invoer" value="${op.datum}"></div></div>`);
   $('input', dat).onchange = e => { op.datum = e.target.value; opslaan(); };
   $('input', dat).disabled = slot;
@@ -1569,7 +1651,7 @@ function puntKaart(o, key, p, nr, herteken) {
     </div><div class="fotoslot"></div></div>
     <div class="punt-onder">
       <button class="vink ${p.nietErkend ? 'aan' : ''}" data-c="nietErkend"><span class="box">${p.nietErkend ? '✓' : ''}</span>Niet erkend (aannemer)</button>
-      <button class="vink ${p.paraaf ? 'aan' : ''}" data-c="paraaf"><span class="box">${p.paraaf ? '✓' : ''}</span>Paraaf (koper)</button>
+      ${key === 'oplever' ? `<button class="vink ${p.paraaf ? 'aan' : ''}" data-c="paraaf"><span class="box">${p.paraaf ? '✓' : ''}</span>Paraaf (koper)</button>` : ''}
       <span class="spacer"></span><button class="verwijder">Verwijderen</button></div></div>`);
   const zet = () => { el.className = `punt ${p.urgentie || ''} ${p.hersteld === true ? 'hersteld' : ''}`; };
   const slot = vergrendeld(o, key);
@@ -1597,10 +1679,11 @@ function puntKaart(o, key, p, nr, herteken) {
 function ververs(o) {
   const main = $('#main'), anker = $('.tabs', main); if (!anker) return;
   const s = objectStatus(o);
-  $$(':scope > .kaart-kop .badges .badge', main).forEach(b => { const k = b.className.split(' ')[1]; if (s.t[k] != null) b.textContent = `${k} ${s.t[k]}`; });
+  const bd = $('#objBadges', main); if (bd) bd.innerHTML = abcBadges(s.t);
   $$(':scope > .banner', main).forEach(b => b.remove());
+  if (afgerond(o)) main.insertBefore(h(`<div class="banner groen" style="display:block">🔒 Oplevering afgerond en ondertekend<small>Dit object kan niet meer worden gewijzigd. Het proces-verbaal (PDF) kun je maken op het tabblad Afronden.</small></div>`), anker);
   if (s.t.A > 0) main.insertBefore(h(`<div class="banner rood">⛔ Oplevering kan niet plaatsvinden <small>${s.t.A} A-punt(en) in de ${s.opname.toLowerCase()}.</small></div>`), anker);
-  if (s.cOver) main.insertBefore(h(`<div class="banner geel">⚠️ ${s.t.C} C-punten — meer dan het maximum van ${C_LIMIET_OBJECT} per woning.</div>`), anker);
+  if (s.cOver) main.insertBefore(h(`<div class="banner geel">⚠️ ${s.t.C} C-punten — meer dan het maximum van ${cLimiet(vindComplex(), 'object')} per woning.</div>`), anker);
   const stip = { voor: tellers(o.opnames.voor).A > 0, oplever: o.opnames.oplever.gestart && tellers(o.opnames.oplever).A > 0 };
   $$('[data-tab]', anker).forEach(bt => {
     const heeft = !!$('.stip', bt), moet = !!stip[bt.dataset.tab];
@@ -1621,9 +1704,20 @@ function koppelSuggesties(inp, veld, kies, bron, minTekens) {
   inp.addEventListener('blur', () => setTimeout(sluit, 150));
 }
 
-/* Tab: meterstanden */
+/* Tab: meterstanden (1.2: optioneel per object) */
 function tabMeter(box, o) {
   const m = o.meter;
+  const keuze = h(`<div class="kaart"><h3>Meterstanden bij dit object</h3>
+    <div class="keuze" style="margin-top:10px"><button data-nvt="0" class="${m.nvt ? '' : 'aan'}">Ja, meterstanden opnemen</button><button data-nvt="1" class="${m.nvt ? 'aan' : ''}">Nee, niet van toepassing</button></div></div>`);
+  $$('[data-nvt]', keuze).forEach(b => b.onclick = () => { m.nvt = b.dataset.nvt === '1'; opslaan(); render(); });
+  const slot = afgerond(o);
+  if (slot) $$('button', keuze).forEach(x => { x.disabled = true; });
+  box.appendChild(keuze);
+  if (m.nvt) {
+    const bewaard = Object.values(m.standen).some(Boolean) || Object.values(m.fotos).some(Boolean);
+    keuze.appendChild(h(`<p style="margin:12px 0 0;color:var(--grijs);font-size:.9rem">Er worden bij dit object geen meterstanden vastgelegd; het proces-verbaal krijgt geen meterstandenbijlage.${bewaard ? ' Eerder ingevulde standen en foto\'s blijven bewaard, maar komen niet in de PDF.' : ''}</p>`));
+    return;
+  }
   const k = h(`<div class="kaart"><h3>Bijlage 1b — Meterstanden</h3><div class="velden" style="margin-top:8px">
     <div class="veld"><label>Datum meteropname</label><input type="date" class="invoer" data-m="datum"></div>
     <div class="veld"><label>Netbeheerder elektra</label><input class="invoer" data-m="netElektra" placeholder="bijv. Liander" autocomplete="off"></div>
@@ -1635,39 +1729,108 @@ function tabMeter(box, o) {
     const std = stdWaarde(c, i.dataset.m); if (std) { i.placeholder = std; i.parentElement.appendChild(h(`<span class="hint">Leeg = standaard van het complex: ${esc(std)}</span>`)); }
   });
   $$('[data-d]', k).forEach(b => b.onclick = () => { m.door = b.dataset.d; $$('[data-d]', k).forEach(x => x.classList.toggle('aan', x === b)); opslaan(); });
+  if (slot) $$('input,button', k).forEach(x => { x.disabled = true; });
   box.appendChild(k);
   METERS.forEach(([key, label], mi) => {
     const r = h(`<div class="meter"><div class="veld"><label>${label}</label><input class="invoer" inputmode="decimal" placeholder="—" autocomplete="off"></div></div>`);
-    const i = $('input', r); i.value = m.standen[key] || ''; i.oninput = () => { m.standen[key] = i.value; opslaan(); };
-    r.appendChild(fotoBlok(m.fotos[key], { klein: true, label: 'Meter', nr: 'M' + (mi + 1), tekst: `M${mi + 1}. ${label}`, onGezet: id => { m.fotos[key] = id; opslaan(); }, onWeg: () => { m.fotos[key] = null; opslaan(); } }));
+    const i = $('input', r); i.value = m.standen[key] || ''; i.oninput = () => { m.standen[key] = i.value; opslaan(); }; i.disabled = slot;
+    r.appendChild(fotoBlok(m.fotos[key], { klein: true, label: 'Meter', nr: 'M' + (mi + 1), tekst: `M${mi + 1}. ${label}`, alleenLezen: slot, onGezet: id => { m.fotos[key] = id; opslaan(); }, onWeg: () => { m.fotos[key] = null; opslaan(); } }));
     box.appendChild(r);
   });
 }
 
-/* Tab: ondertekening */
-function tabOnderteken(box, o) {
-  const keys = o.opnames.oplever.gestart ? ['voor', 'oplever'] : ['voor'];
-  if (!keys.includes(nav.opname)) nav.opname = keys[keys.length - 1];
-  if (keys.length > 1) {
-    const kz = h(`<div class="keuze" style="margin-bottom:14px">${keys.map(k => `<button data-o="${k}" class="${nav.opname === k ? 'aan' : ''}">${OPNAMES[k]}</button>`).join('')}</div>`);
-    $$('[data-o]', kz).forEach(b => b.onclick = () => { nav.opname = b.dataset.o; render(); }); box.appendChild(kz);
+/* Tab: overige zaken (1.2). Hoort bij het object; alleen-lezen zodra de oplevering is ondertekend. */
+function tabOverig(box, o) {
+  const oz = o.overig, slot = ondertekend(o, 'oplever') || afgerond(o), c = vindComplex();
+  if (slot) box.appendChild(h(`<div class="banner blauw" style="display:block">🔒 De oplevering is ondertekend; overige zaken zijn alleen-lezen.<small>Verwijder de handtekening(en) op het tabblad Afronden om te wijzigen.</small></div>`));
+  /* Kopiëren van een andere woning in hetzelfde complex: eerst het eigen blok, dan de rest; standaard de laatst gewijzigde */
+  if (!slot) {
+    const bronnen = [];
+    c.blokken.forEach(b => b.objecten.forEach(x => { if (x !== o && overigIngevuld(x)) bronnen.push({ o: x, b }); }));
+    const kp = h(`<div class="kaart"><h3>Overnemen van een andere woning</h3></div>`);
+    if (!bronnen.length) kp.appendChild(h(`<p style="margin:6px 0 0;color:var(--grijs);font-size:.9rem">Zodra bij een andere woning in dit complex overige zaken zijn ingevuld, kun je die hier in één keer overnemen en daarna aanpassen.</p>`));
+    else {
+      const eigenBlok = vindBlok();
+      bronnen.sort((a, b) => (a.b === eigenBlok ? 0 : 1) - (b.b === eigenBlok ? 0 : 1) || String(a.b.naam).localeCompare(String(b.b.naam), 'nl', { numeric: true }) || String(a.o.adres).localeCompare(String(b.o.adres), 'nl', { numeric: true }));
+      const laatste = bronnen.reduce((m, x) => ((x.o.gewijzigd || '') > (m.o.gewijzigd || '') ? x : m), bronnen[0]);
+      kp.appendChild(h(`<div class="rijvelden" style="margin-top:8px"><div class="veld" style="margin:0"><select class="invoer">${bronnen.map((x, i) => `<option value="${i}" ${x === laatste ? 'selected' : ''}>Blok ${esc(x.b.naam)} · ${esc(x.o.adres)}</option>`).join('')}</select></div>
+        <button class="knop" style="flex:0 0 auto">Kopiëren</button></div>`));
+      $('button', kp).onclick = async () => {
+        const bron = bronnen[+$('select', kp).value].o;
+        if (overigIngevuld(o) && !await bevestig('Overige zaken overschrijven?', `Alle overige zaken van dit object (ook het vrije tekstveld) worden vervangen door die van ${bron.adres}.`, 'Overschrijven')) return;
+        o.overig = Object.assign(nieuwOverig(), JSON.parse(JSON.stringify(bron.overig)));
+        opslaan(); render(); toast(`Overgenomen van ${bron.adres}; controleer en pas aan waar nodig`, 3500);
+      };
+    }
+    box.appendChild(kp);
   }
-  const op = o.opnames[nav.opname], ht = op.handtekeningen;
-  box.appendChild(h(`<div class="banner blauw">Proces-verbaal ${OPNAMES[nav.opname].toLowerCase()}<small>Onderteken met vinger of Apple Pencil. Overslaan mag: de PDF krijgt dan lege handtekeningvakken.</small></div>`));
-  const k = h(`<div class="kaart"><div class="velden"><div class="veld"><label>Opgemaakt en ondertekend te</label><input class="invoer" data-h="plaats" autocomplete="off"></div>
-    <div class="veld"><label>Datum</label><input type="date" class="invoer" data-h="datum"></div></div></div>`);
-  $$('[data-h]', k).forEach(i => { i.value = ht[i.dataset.h] || ''; i.oninput = () => { ht[i.dataset.h] = i.value; opslaan(); }; });
+  const k = h(`<div class="kaart"><h3>Overige zaken</h3><div class="oz-lijst" style="margin-top:4px"></div>
+    <div class="veld" style="margin:12px 0 0"><label>Overig</label><textarea class="invoer" rows="3" data-oz="overig" placeholder="Overige opmerkingen, afspraken of overgedragen zaken"></textarea></div></div>`);
+  const lijst = $('.oz-lijst', k);
+  OVERIGE_ZAKEN.forEach(([key, label, soort]) => {
+    if (soort === 'aantal') {
+      const r = h(`<div class="oz-rij"><span class="oz-label">${esc(label)}</span><div class="teller"><button type="button" data-st="-1">−</button><input class="invoer" inputmode="numeric" pattern="[0-9]*" placeholder="—" autocomplete="off"><button type="button" data-st="1">+</button></div></div>`);
+      const i = $('input', r); i.value = oz[key] || '';
+      i.oninput = () => { i.value = i.value.replace(/[^0-9]/g, ''); oz[key] = i.value; opslaan(); };
+      $$('[data-st]', r).forEach(b => b.onclick = () => { const n = Math.max(0, (parseInt(oz[key], 10) || 0) + +b.dataset.st); oz[key] = String(n); i.value = oz[key]; opslaan(); });
+      lijst.appendChild(r); return;
+    }
+    const opties = soort === 'jnn' ? ['ja', 'nee', 'nvt'] : ['ja', 'nee'];
+    const r = h(`<div class="oz-rij"><span class="oz-label">${esc(label)}</span><div class="keuze">${opties.map(v => `<button type="button" data-v="${v}" class="${oz[key] === v ? 'aan' : ''}">${v === 'nvt' ? 'N.v.t.' : OZ_WAARDE[v]}</button>`).join('')}</div></div>`);
+    $$('[data-v]', r).forEach(b => b.onclick = () => { oz[key] = oz[key] === b.dataset.v ? '' : b.dataset.v; $$('[data-v]', r).forEach(x => x.classList.toggle('aan', x.dataset.v === oz[key])); opslaan(); });
+    lijst.appendChild(r);
+  });
+  const ta = $('[data-oz]', k); ta.value = oz.overig || ''; ta.oninput = () => { oz.overig = ta.value; opslaan(); };
   box.appendChild(k);
-  const pt = aandachtspunten(o, nav.opname);
-  if (pt.length && !(ht.koper && ht.aannemer)) box.appendChild(h(`<div class="banner geel" style="display:block">⚠️ Let op vóór het ondertekenen<small>${pt.map(esc).join('<br>')}</small></div>`));
-  const c = vindComplex();
-  [['koper', 'De koper / opdrachtgever', partij(o, c, 'vertKoper')], ['aannemer', 'De verkoper / aannemer', partij(o, c, 'vertAannemer')]].forEach(([wie, label, naam]) => box.appendChild(handtekeningVeld(o, nav.opname, wie, label + (naam ? ' — ' + naam : ''))));
+  if (slot) $$('input,textarea,button', k).forEach(x => { x.disabled = true; });
+}
+
+/* Tab: afronden (1.2: ondertekening en PDF samengevoegd). Alleen de oplevering wordt ondertekend. */
+function tabAfronden(box, o) {
+  const c = vindComplex(), b = vindBlok();
+  if (o.opnames.oplever.gestart) {
+    const op = o.opnames.oplever, ht = op.handtekeningen, t = tellers(op);
+    const kaart = h(`<div class="kaart"><div class="afr-kop"><h2>Proces-verbaal oplevering</h2><div class="badges">${abcBadges(t)}</div></div>
+      <p style="margin:0 0 12px;color:var(--grijs);font-size:.9rem">${afgerond(o) ? 'Door beide partijen ondertekend. De oplevering is definitief en kan niet meer worden gewijzigd; de PDF kun je altijd opnieuw maken.' : 'Onderteken met vinger of Apple Pencil. Na de tweede handtekening is de oplevering definitief afgerond. Overslaan mag: de PDF krijgt dan lege handtekeningvakken.'}</p>
+      <div class="velden"><div class="veld"><label>Opgemaakt en ondertekend te</label><input class="invoer" data-h="plaats" autocomplete="off"></div>
+      <div class="veld"><label>Datum</label><input type="date" class="invoer" data-h="datum"></div></div></div>`);
+    $$('[data-h]', kaart).forEach(i => { i.value = ht[i.dataset.h] || ''; i.oninput = () => { ht[i.dataset.h] = i.value; opslaan(); }; i.disabled = afgerond(o); });
+    const pt = aandachtspunten(o, 'oplever');
+    if (pt.length && !afgerond(o)) kaart.appendChild(h(`<div class="banner geel" style="display:block">⚠️ Let op vóór het ondertekenen<small>${pt.map(esc).join('<br>')}</small></div>`));
+    [['koper', 'De koper / opdrachtgever', partij(o, c, 'vertKoper')], ['aannemer', 'De verkoper / aannemer', partij(o, c, 'vertAannemer')]].forEach(([wie, label, naam]) => kaart.appendChild(handtekeningVeld(o, 'oplever', wie, label + (naam ? ' — ' + naam : ''))));
+    kaart.appendChild(pdfDeel(c, b, o, 'oplever'));
+    box.appendChild(kaart);
+  } else {
+    box.appendChild(h(`<div class="banner blauw" style="display:block">Ondertekenen gebeurt bij de oplevering<small>Een vooropname wordt niet ondertekend of geparafeerd. Start de oplevering op het tabblad Oplevering; daarna onderteken je hier.</small></div>`));
+  }
+  const vo = o.opnames.voor;
+  const kv = h(`<div class="kaart"><div class="afr-kop"><h2>Proces-verbaal vooropname</h2><div class="badges">${abcBadges(tellers(vo))}</div></div>
+    <p style="margin:0 0 10px;color:var(--grijs);font-size:.9rem">Wordt niet ondertekend.</p>
+    ${aandachtspunten(o, 'voor').map(s => `<div class="banner geel" style="margin-bottom:10px">⚠️ ${esc(s)}.</div>`).join('')}</div>`);
+  kv.appendChild(pdfDeel(c, b, o, 'voor'));
+  box.appendChild(kv);
+  box.appendChild(h(`<div class="kaart"><h3>Tip</h3><p style="margin:6px 0 0;color:var(--grijs);font-size:.9rem">Na het maken verschijnt een venster met “Delen / bewaren”: daarmee sla je de PDF op in Bestanden of mail je hem. Werkt dat niet, gebruik dan “Downloaden”. Fotonummers in de PDF zijn gelijk aan de puntnummers; meterfoto's heten M1 t/m M5.</p></div>`));
+}
+/* Samenvattingsregel + knop 'Proces-verbaal maken (PDF)' voor één opname */
+function pdfDeel(c, b, o, k) {
+  const op = o.opnames[k], t = tellers(op), naam = pdfNaam(c, b, o, k, op), fotos = op.punten.filter(p => p.fotoId).length;
+  const status = k === 'oplever' ? ' · ' + (op.handtekeningen.koper && op.handtekeningen.aannemer ? 'ondertekend' : 'handtekeningvakken ' + (op.handtekeningen.koper || op.handtekeningen.aannemer ? 'deels leeg' : 'leeg')) : '';
+  const el = h(`<div style="margin-top:12px"><p style="margin:0 0 6px;color:var(--grijs)">${t.open} open punt(en)${t.hersteld ? ', ' + t.hersteld + ' hersteld' : ''} · ${fotos} foto('s) in de bijlage${status}<br><span style="font-size:.85rem">${esc(naam)}</span></p>
+    <div class="knoprij"><button class="knop">Proces-verbaal ${OPNAMES[k].toLowerCase()} maken (PDF)</button></div></div>`);
+  const bt = $('.knop', el), label = bt.textContent;
+  bt.onclick = async () => {
+    bt.disabled = true; bt.textContent = 'PDF wordt gemaakt…';
+    try { const pdf = await maakProcesVerbaal(c, b, o, k); await leverBestand(pdf.blob, pdf.naam, 'PDF gereed'); } catch (err) { console.error(err); toast('PDF mislukt: ' + err.message, 5000); }
+    bt.disabled = false; bt.textContent = label;
+  };
+  return el;
 }
 function handtekeningVeld(o, key, wie, label) {
   const op = o.opnames[key], ht = op.handtekeningen;
   const el = h(`<div class="hand ${ht[wie] ? 'gezet' : ''}"><div class="naam">${esc(label)}</div><canvas></canvas>
     <div class="hand-rij"><button class="knop licht klein" data-a="wis">Wissen</button><button class="knop groen klein" data-a="ok" ${ht[wie] ? 'disabled' : ''}>Handtekening bewaren</button><span style="flex:1"></span>
-    <button class="knop gevaar klein" data-a="weg" ${ht[wie] ? '' : 'disabled'}>Verwijderen</button></div></div>`);
+    <button class="knop gevaar klein" data-a="weg" ${ht[wie] && !afgerond(o) ? '' : 'disabled'}>Verwijderen</button></div></div>`);
+  if (afgerond(o)) $('.hand-rij', el).remove();   // definitief: geen knoppen meer
   const cv = $('canvas', el), ctx = cv.getContext('2d'); let tekenend = false, leeg = true, laatst = null, lw = 1, lh = 1;
   const setup = () => {
     const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1; if (!r.width) return;
@@ -1696,16 +1859,21 @@ function handtekeningVeld(o, key, wie, label) {
       if (leeg) return toast('Zet eerst een handtekening');
       // H2: waarschuwen bij A-punten, niet-beoordeelde of onvolledige punten; ondertekenen vergrendelt de opname
       const pt = getekend(o, key) ? [] : aandachtspunten(o, key);
+      const ander = wie === 'koper' ? 'aannemer' : 'koper', laatste = !!ht[ander];
       if (pt.length && !await bevestig('Toch ondertekenen?', pt.join('\n') + '\n\nNa ondertekening is de opname alleen-lezen.', 'Ondertekenen')) return;
+      // 1.2.1: de tweede handtekening rondt de oplevering definitief af
+      if (laatste && !await bevestig('Oplevering definitief afronden?', 'Met deze tweede handtekening is de oplevering akkoord en definitief afgerond. Daarna kan niets meer worden gewijzigd of verwijderd: geen punten, handtekeningen, meterstanden, overige zaken of gegevens. De PDF kun je daarna altijd nog maken.', 'Akkoord, afronden')) return;
       try {
         const b = await new Promise(res => cv.toBlob(res, 'image/png'));
         if (!b) throw new Error('de browser gaf geen afbeelding terug');   // M3c
         const id = 'h' + uid(); await dbPut('fotos', id, b);
         ht[wie] = id; if (!ht.datum) ht.datum = vandaag(); if (!op.datum) op.datum = vandaag();
-        opslaan(); await nuOpslaan(); render(); toast('Handtekening bewaard');
+        if (afgerond(o)) zetAfgerondVast(o, vindComplex());
+        opslaan(); await nuOpslaan(); render(); toast(afgerond(o) ? 'Oplevering afgerond' : 'Handtekening bewaard');
       } catch (err) { console.error(err); toast('Handtekening bewaren mislukt: ' + (err && err.message), 5000); }
     }
     if (a.dataset.a === 'weg') {
+      if (afgerond(o)) return toast('De oplevering is afgerond; handtekeningen kunnen niet meer worden verwijderd', 4000);
       if (!await bevestig('Handtekening verwijderen?', 'De bewaarde handtekening wordt gewist. Zonder handtekeningen is de opname weer te wijzigen.', 'Verwijderen', true)) return;
       const oud = ht[wie]; ht[wie] = null; opslaan(); await nuOpslaan(); await verwijderFoto(oud); render();
     }
@@ -1713,29 +1881,11 @@ function handtekeningVeld(o, key, wie, label) {
   return el;
 }
 
-/* Tab: PDF */
-function tabPDF(box, o) {
-  const c = vindComplex(), b = vindBlok();
-  const keys = o.opnames.oplever.gestart ? ['voor', 'oplever'] : ['voor'];
-  keys.forEach(k => {
-    const op = o.opnames[k], t = tellers(op), naam = pdfNaam(c, b, o, k, op);
-    const fotos = op.punten.filter(p => p.fotoId).length;
-    const kaart = h(`<div class="kaart"><div class="kaart-kop"><h2>Proces-verbaal ${OPNAMES[k].toLowerCase()}</h2><div class="badges"><span class="badge A">A ${t.A}</span><span class="badge B">B ${t.B}</span><span class="badge C">C ${t.C}</span></div></div>
-      <p style="margin:0 0 10px;color:var(--grijs)">${t.open} open punt(en)${t.hersteld ? ', ' + t.hersteld + ' hersteld' : ''} · ${fotos} foto('s) in de bijlage · ${op.handtekeningen.koper && op.handtekeningen.aannemer ? 'ondertekend' : 'handtekeningvakken ' + (op.handtekeningen.koper || op.handtekeningen.aannemer ? 'deels leeg' : 'leeg')}<br><span style="font-size:.85rem">${esc(naam)}</span></p>
-      ${aandachtspunten(o, k).map(s => `<div class="banner geel" style="margin-bottom:10px">⚠️ ${esc(s)}.</div>`).join('')}
-      <div class="knoprij"><button class="knop">Proces-verbaal maken (PDF)</button></div></div>`);
-    $('.knop', kaart).onclick = async e => {
-      const bt = e.currentTarget; bt.disabled = true; bt.textContent = 'PDF wordt gemaakt…';
-      try { const pdf = await maakProcesVerbaal(c, b, o, k); await leverBestand(pdf.blob, pdf.naam, 'PDF gereed'); } catch (err) { console.error(err); toast('PDF mislukt: ' + err.message, 5000); }
-      bt.disabled = false; bt.textContent = 'Proces-verbaal maken (PDF)';
-    };
-    box.appendChild(kaart);
-  });
-  box.appendChild(h(`<div class="kaart"><h3>Tip</h3><p style="margin:6px 0 0;color:var(--grijs);font-size:.9rem">Na het maken verschijnt een venster met “Delen / bewaren”: daarmee sla je de PDF op in Bestanden of mail je hem. Werkt dat niet, gebruik dan “Downloaden”. Fotonummers in de PDF zijn gelijk aan de puntnummers; meterfoto's heten M1 t/m M5.</p></div>`));
-}
+/* 1.2.1: bestandsnaam = naam van het object, bijv. "Straat 3 - Oplevering 21-09-2026.pdf".
+   Alleen tekens die in Bestanden, OneDrive en Windows niet mogen, worden weggehaald; spaties blijven staan. */
 function pdfNaam(c, b, o, key, op) {
-  const schoon = s => String(s || '').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '');
-  return `${schoon(c.nummer)}_Blok-${schoon(b.naam)}_${schoon(o.adres)}_${OPNAMES[key]}_${op.datum || vandaag()}.pdf`;
+  const schoon = s => String(s || '').replace(/[\\/:*?"<>|\u0000-\u001F]+/g, ' ').replace(/[—–]/g, '-').replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '');
+  return `${schoon(o.adres) || 'Object'} - ${OPNAMES[key]} ${fmtDatum(op.datum || vandaag())}.pdf`;
 }
 
 /* ===== Start ===== */
@@ -1802,6 +1952,7 @@ function laadFont(doc) {
 async function maakProcesVerbaal(c, b, o, key) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+  doc.setProperties({ title: `${o.adres} - Proces-verbaal ${OPNAMES[key].toLowerCase()}`, subject: `Complex ${c.nummer} ${c.naam || ''} · Blok ${b.naam}`.trim(), author: KOPER.naam, creator: 'Opleverinspectie ' + APP_VERSIE });
   laadFont(doc); doc.setFont('RedditSans', 'normal');
   const W = 210, M = 15, BR = W - 2 * M; let y = M;
   const op = o.opnames[key], t = tellers(op), isOpl = key === 'oplever';
@@ -1862,21 +2013,24 @@ async function maakProcesVerbaal(c, b, o, key) {
   // M4: fotonummer = puntnummer (zoals op het scherm); meterfoto's M1 t/m M5
   const fotoNrs = new Map();
   const alleFotoPunten = [...open, ...hersteld]; alleFotoPunten.forEach((p, i) => { if (p.fotoId) fotoNrs.set(p.id, i + 1); });
-  const meterFotos = METERS.map(([k, l], i) => ({ id: o.meter.fotos[k], nr: 'M' + (i + 1), label: l })).filter(f => f.id);
-  const kolommen = ['Nr', 'Ruimte', 'Omschrijving tekortkoming', 'Urg.', 'Niet erkend', 'Paraaf', 'Foto nr.'];
-  const puntRij = (p, i) => [i + 1, pdfSchoon(p.ruimte), pdfSchoon(p.omschrijving) + (isOpl && p.uitVooropname ? '\n(uit vooropname' + (p.hersteld === false ? ' — niet hersteld' : '') + ')' : ''), p.urgentie || '', p.nietErkend ? 'X' : '', p.paraaf ? 'X' : '', fotoNrs.get(p.id) || ''];
+  const metersAan = !o.meter.nvt;   // 1.2: meterstanden optioneel
+  const meterFotos = metersAan ? METERS.map(([k, l], i) => ({ id: o.meter.fotos[k], nr: 'M' + (i + 1), label: l })).filter(f => f.id) : [];
+  // 1.2: een vooropname wordt niet geparafeerd; de kolom Paraaf staat alleen in het proces-verbaal van oplevering
+  const kolommen = ['Nr', 'Ruimte', 'Omschrijving tekortkoming', 'Urg.', 'Niet erkend', ...(isOpl ? ['Paraaf'] : []), 'Foto nr.'];
+  const puntRij = (p, i) => [i + 1, pdfSchoon(p.ruimte), pdfSchoon(p.omschrijving) + (isOpl && p.uitVooropname ? '\n(uit vooropname' + (p.hersteld === false ? ' — niet hersteld' : '') + ')' : ''), p.urgentie || '', p.nietErkend ? 'X' : '', ...(isOpl ? [p.paraaf ? 'X' : ''] : []), fotoNrs.get(p.id) || ''];
   const tabelStijl = {
     margin: { left: M, right: M }, theme: 'grid', styles: { font: 'RedditSans', fontSize: 9, textColor: KLEUR.blauw, lineColor: KLEUR.lijn, lineWidth: .2, cellPadding: 1.8, halign: 'left', valign: 'top', overflow: 'linebreak' },
     headStyles: { fillColor: KLEUR.rood, textColor: 255, fontStyle: 'bold', halign: 'left' },
-    columnStyles: { 0: { cellWidth: 9 }, 1: { cellWidth: 30 }, 2: { cellWidth: 'auto' }, 3: { cellWidth: 12, fontStyle: 'bold' }, 4: { cellWidth: 20, halign: 'center', fontStyle: 'bold' }, 5: { cellWidth: 16, halign: 'center', fontStyle: 'bold' }, 6: { cellWidth: 16 } },
+    columnStyles: Object.assign({ 0: { cellWidth: 9 }, 1: { cellWidth: 30 }, 2: { cellWidth: 'auto' }, 3: { cellWidth: 12, fontStyle: 'bold' }, 4: { cellWidth: 20, halign: 'center', fontStyle: 'bold' } },
+      isOpl ? { 5: { cellWidth: 16, halign: 'center', fontStyle: 'bold' }, 6: { cellWidth: 16 } } : { 5: { cellWidth: 16 } }),
     didParseCell: d => { if (d.section === 'body' && d.column.index === 3) { const u = d.cell.raw; if (u === 'A') { d.cell.styles.textColor = KLEUR.rood; } if (u === 'C') { d.cell.styles.fillColor = [255, 243, 196]; } } }
   };
   kop('De volgende tekortkomingen zijn geconstateerd:');
   if (open.length) { doc.autoTable(Object.assign({ startY: y, head: [kolommen], body: open.map(puntRij) }, tabelStijl)); y = doc.lastAutoTable.finalY + 2; }
   else { doc.setTextColor(...KLEUR.groen); doc.setFont('RedditSans', 'bold'); tekst('Geen open tekortkomingen geconstateerd.', M, y + 2); doc.setFont('RedditSans', 'normal'); doc.setTextColor(...KLEUR.blauw); y += 8; }
   doc.setFontSize(7.5); doc.setTextColor(...KLEUR.grijs);
-  const voet = [`Ruimte: bijvoorbeeld woonkamer, keuken, berging. Niet erkend: hier geeft de aannemer aan dat hij een tekortkoming niet erkent. Paraaf: hier geeft de koper/opdrachtgever akkoord op de afhandeling van de opleverpunten.`,
-    `Aantal open punten: A ${t.A} · B ${t.B} · C ${t.C}${t.C > C_LIMIET_OBJECT ? ` (let op: meer dan ${C_LIMIET_OBJECT} C-punten per woning)` : ''}${t.nietErkend ? ` · niet erkend: ${t.nietErkend}` : ''}.`];
+  const voet = [`Ruimte: bijvoorbeeld woonkamer, keuken, berging. Niet erkend: hier geeft de aannemer aan dat hij een tekortkoming niet erkent.${isOpl ? ' Paraaf: hier geeft de koper/opdrachtgever akkoord op de afhandeling van de opleverpunten.' : ''}`,
+    `Aantal open punten: A ${t.A} · B ${t.B} · C ${t.C}${cBoven(c, 'object', t.C) ? ` (let op: meer dan ${cLimiet(c, 'object')} C-punten per woning)` : ''}${t.nietErkend ? ` · niet erkend: ${t.nietErkend}` : ''}.`];
   voet.forEach(s => { const r = doc.splitTextToSize(s, BR); ruimte(r.length * 3.4 + 1); tekst(r, M, y + 2); y += r.length * 3.4 + 1; });
   doc.setFontSize(9.5); doc.setTextColor(...KLEUR.blauw); y += 4;
   if (isOpl && hersteld.length) {
@@ -1885,10 +2039,11 @@ async function maakProcesVerbaal(c, b, o, key) {
     y = doc.lastAutoTable.finalY + 6;
   }
 
-  /* Meterstanden */
+  /* Meterstanden (alleen als ze bij dit object horen) */
+  const m = o.meter;
+  if (metersAan) {
   ruimte(45);
   kop('Bijlage 1b — Meterstanden');
-  const m = o.meter;
   tekst(`Datum meteropname: ${fmtDatum(m.datum) || '…… / …… / ………'}`, M, y); y += 4.5;
   tekst(`Netbeheerder elektra: ${meterNet(o, c, 'netElektra') || '…………………'}`, M, y); tekst(`Netbeheerder water: ${meterNet(o, c, 'netWater') || '…………………'}`, M + BR / 2, y); y += 5;
   tekst('Meterstanden opgenomen door:', M, y); x = M + 50; ['Koper', 'Aannemer', 'Gezamenlijk'].forEach(d => { x = vink(x, y, m.door === d, d); }); y += 4;
@@ -1899,10 +2054,28 @@ async function maakProcesVerbaal(c, b, o, key) {
     body: [[pdfSchoon(o.adres), ...METERS.map(([k]) => m.standen[k] || '')], ['Foto nr.', ...METERS.map(([k]) => { const f = meterFotos.find(z => z.id === m.fotos[k]); return f ? String(f.nr) : ''; })]]
   });
   y = doc.lastAutoTable.finalY + 8;
+  }
 
-  /* Verklaring en handtekeningen */
+  /* Overige zaken (1.2): in de oplevering altijd (lege velden om met de hand in te vullen), in de vooropname alleen als er iets is ingevuld */
+  if (isOpl || overigIngevuld(o)) {
+    ruimte(60);
+    kop('Overige zaken');
+    const oz = o.overig || {};
+    const rijen = OVERIGE_ZAKEN.map(([k, l, soort]) => [l, soort === 'aantal' ? (oz[k] || '') : (OZ_WAARDE[oz[k]] || (soort === 'jnn' ? 'Ja / Nee / N.v.t.' : 'Ja / Nee'))]);
+    doc.autoTable({
+      startY: y, margin: { left: M, right: M }, theme: 'grid', styles: { font: 'RedditSans', fontSize: 9, textColor: KLEUR.blauw, lineColor: KLEUR.lijn, lineWidth: .2, cellPadding: 1.8, halign: 'left', overflow: 'linebreak' },
+      headStyles: { fillColor: KLEUR.rood, textColor: 255, fontStyle: 'bold', halign: 'left' }, columnStyles: { 0: { cellWidth: BR * 0.6 }, 1: { cellWidth: BR * 0.4 } },
+      head: [['Onderdeel', 'Aanwezig / aantal']],
+      body: rijen.concat([[{ content: 'Overig: ' + (pdfSchoon((oz.overig || '').trim()) || ''), colSpan: 2 }]]),
+      didParseCell: d => { if (d.section === 'body' && d.column.index === 1 && d.row.index < OVERIGE_ZAKEN.length) { const k = OVERIGE_ZAKEN[d.row.index][0]; if (!oz[k]) d.cell.styles.textColor = KLEUR.grijs; else d.cell.styles.fontStyle = 'bold'; } }
+    });
+    y = doc.lastAutoTable.finalY + 8;
+  }
+
+  /* Verklaring en handtekeningen: alleen bij de oplevering (1.2: een vooropname wordt niet ondertekend) */
+  if (isOpl) {
   ruimte(75);
-  const verklaring = 'De koper/opdrachtgever verklaart het werk te hebben opgenomen en de hierboven genoemde tekortkomingen te hebben geconstateerd. Ondertekening van dit proces-verbaal houdt geen aanvaarding in van gebreken die bij de opname redelijkerwijs niet waarneembaar waren (verborgen gebreken), noch doet ondertekening afbreuk aan enige andere aanspraak van koper uit hoofde van de onderliggende overeenkomst. De verkoper/aannemer verklaart de geconstateerde tekortkomingen binnen twee werkweken (10 werkdagen), tenzij sprake is van langere levertijden, na datum van ondertekening te herstellen.';
+  const verklaring = 'De koper/opdrachtgever verklaart het werk te hebben opgenomen en de hierboven genoemde tekortkomingen te hebben geconstateerd. Ondertekening van dit proces-verbaal houdt geen aanvaarding in van gebreken die bij de opname redelijkerwijs niet waarneembaar waren (verborgen gebreken), noch doet ondertekening afbreuk aan enige andere aanspraak van koper uit hoofde van de onderliggende overeenkomst. De verkoper/aannemer verklaart de geconstateerde tekortkomingen binnen de overeengekomen termijn, tenzij sprake is van langere levertijden, na datum van ondertekening te herstellen.';
   const vr = doc.splitTextToSize(verklaring, BR); tekst(vr, M, y); y += vr.length * 4.3 + 6;
   const ht = op.handtekeningen;
   tekst(`Opgemaakt en ondertekend te ${ht.plaats || '………………………………'}`, M, y); tekst(`Datum ${fmtDatum(ht.datum) || '….-….-……'}`, M + BR / 2, y); y += 8;
@@ -1919,6 +2092,7 @@ async function maakProcesVerbaal(c, b, o, key) {
     doc.setFontSize(8.5); doc.setTextColor(...KLEUR.grijs); tekst(pas(naam || '', bw), bx, y + bh + 6); doc.setFontSize(9.5); doc.setTextColor(...KLEUR.blauw);
   }
   y += bh + 10;
+  }
 
   /* Fotobijlage */
   const bijlage = [...alleFotoPunten.filter(p => p.fotoId).map(p => ({ id: p.fotoId, nr: fotoNrs.get(p.id), titel: `${p.ruimte || ''}`, sub: `${p.omschrijving || ''}`, urg: p.urgentie, extra: p.hersteld === true ? 'Hersteld' : (isOpl && p.uitVooropname ? 'Uit vooropname' : '') })),
@@ -1950,7 +2124,7 @@ async function maakProcesVerbaal(c, b, o, key) {
     tekst(pas(`Woningstichting Wageningen · Proces-verbaal ${isOpl ? 'oplevering' : 'vooropname'} · ${c.nummer} blok ${b.naam} · ${o.adres}`, BR - 28), M, 290);
     tekst(`Pagina ${i} van ${n}`, W - M, 290, { align: 'right' });
   }
-  return { blob: doc.output('blob'), naam: pdfNaam(c, b, o, key, op) };   // afleveren gebeurt in tabPDF (M1)
+  return { blob: doc.output('blob'), naam: pdfNaam(c, b, o, key, op) };   // afleveren gebeurt in pdfDeel (M1)
 }
 /* L8: het ingesloten lettertype kent geen emoji; die zouden als lege blokjes of verschoven tekst in de PDF komen */
 let EMOJI_RE; try { EMOJI_RE = new RegExp('[\\p{Extended_Pictographic}\\u{FE0F}\\u{200D}\\u{1F3FB}-\\u{1F3FF}]', 'gu'); } catch (e) { EMOJI_RE = /[\u2600-\u27BF\uFE0F\u200D]|[\uD83C-\uD83E][\uDC00-\uDFFF]/g; }
