@@ -138,12 +138,14 @@ textarea.invoer{min-height:70px;resize:vertical}
 
 /* Tabs */
 .tabs{display:flex;gap:4px;background:var(--wit);border:1px solid var(--lijn);border-radius:12px;padding:4px;margin-bottom:14px;
-  overflow-x:auto;-webkit-overflow-scrolling:touch;
-  /* Tabs blijven onder de kop in beeld; de band in achtergrondkleur dekt de inhoud die eronder doorschuift */
-  position:sticky;top:calc(var(--kop-h,72px) + 6px);z-index:16;
-  box-shadow:0 0 0 6px var(--achtergrond),0 12px 12px -6px rgba(29,44,53,.12)}
-/* Velden die focus krijgen niet onder de kop + tabs laten verdwijnen */
-html{scroll-padding-top:calc(var(--kop-h,72px) + 80px)}
+  overflow-x:auto;-webkit-overflow-scrolling:touch}
+/* Objectscherm: kruimelpad + tabs blijven samen onder de kop in beeld; de achtergrond dekt de inhoud die eronder doorschuift */
+.obj-plak{position:sticky;top:var(--kop-h,72px);z-index:16;background:var(--achtergrond);
+  margin:-8px calc(-1 * var(--rand)) 4px;padding:8px var(--rand) 10px;box-shadow:0 10px 10px -10px rgba(29,44,53,.25)}
+.obj-plak .tabs{margin-bottom:0}
+.obj-plak .badges{flex:none}.obj-plak .badge{white-space:nowrap}
+/* Velden die focus krijgen niet onder de kop + kruimelpad + tabs laten verdwijnen */
+html{scroll-padding-top:calc(var(--kop-h,72px) + var(--plak-h,0px) + 12px)}
 .tabs button{flex:1 0 auto;min-height:var(--tik);padding:0 12px;border-radius:9px;font-weight:700;color:var(--grijs);white-space:nowrap;position:relative}
 .tabs button.aan{background:var(--blauw);color:var(--wit)}
 .tabs button .stip{position:absolute;top:6px;right:8px;width:9px;height:9px;border-radius:50%;background:var(--rood)}
@@ -1361,7 +1363,7 @@ async function importJSON(file) {
 /* ===== Rendering ===== */
 let laatstePlek = '';
 function render() {
-  const main = $('#main'); main.innerHTML = '';
+  const main = $('#main'); main.innerHTML = ''; volgPlakHoogte(null);
   // L2: alleen naar boven bij een ander scherm of tabblad, niet bij hertekenen (bijv. na het bewaren van een handtekening)
   const plek = [nav.scherm, nav.complexId, nav.blokId, nav.objectId, nav.scherm === 'object' ? nav.tab : ''].join('|');
   if (plek !== laatstePlek) { window.scrollTo(0, 0); laatstePlek = plek; }
@@ -1391,6 +1393,13 @@ function kop(acties) {
 
 }
 
+/* Hoogte van het plakblok (kruimelpad + tabs) op het objectscherm, voor scroll-padding */
+let plakObs = null;
+function volgPlakHoogte(el) {
+  if (plakObs) { plakObs.disconnect(); plakObs = null; }
+  const zet = () => document.documentElement.style.setProperty('--plak-h', (el && el.isConnected ? el.offsetHeight : 0) + 'px');
+  zet(); if (el && window.ResizeObserver) { plakObs = new ResizeObserver(zet); plakObs.observe(el); }
+}
 /* Hoogte van de kop als CSS-variabele, zodat de tabs van een object er direct onder blijven plakken */
 function zetKopHoogte() { const k = $('#kop'); if (k) document.documentElement.style.setProperty('--kop-h', k.offsetHeight + 'px'); }
 if (window.ResizeObserver) new ResizeObserver(zetKopHoogte).observe(document.getElementById('kop'));
@@ -1578,14 +1587,16 @@ function renderObject(main) {
   const c = vindComplex(), b = vindBlok(), o = vindObject(); if (!o) return ga('blok');
   kop([{ tekst: 'Bewerken', fn: () => objectMenu(o, b) }]);
   const s = objectStatus(o);
-  main.appendChild(h(`<div class="kaart-kop" style="margin-bottom:6px"><h1 class="kruimels">${kruimelHTML()}</h1>
+  const plak = h(`<div class="obj-plak"></div>`);
+  plak.appendChild(h(`<div class="kaart-kop" style="margin-bottom:6px"><h1 class="kruimels">${kruimelHTML()}</h1>
     <div class="badges" id="objBadges">${abcBadges(s.t)}</div></div>`));
   const tabs = h(`<div class="tabs"></div>`);
   TABS.forEach(([k, l]) => {
     const bt = h(`<button class="${nav.tab === k ? 'aan' : ''}" data-tab="${k}">${l}</button>`);
     bt.onclick = () => { nav.tab = k; render(); }; tabs.appendChild(bt);
   });
-  main.appendChild(tabs);
+  plak.appendChild(tabs); main.appendChild(plak);
+  volgPlakHoogte(plak);
   ververs(o);
   const inhoud = h(`<div class="${afgerond(o) ? 'alleen-lezen' : ''}"></div>`); main.appendChild(inhoud);
   ({ gegevens: tabGegevens, voor: () => tabOpname(inhoud, o, 'voor'), oplever: () => tabOpname(inhoud, o, 'oplever'), meter: tabMeter, overig: tabOverig, afronden: tabAfronden })[nav.tab](inhoud, o);
@@ -1748,7 +1759,7 @@ function ververs(o) {
   const s = objectStatus(o);
   const bd = $('#objBadges', main); if (bd) bd.innerHTML = abcBadges(s.t);
   $$(':scope > .banner', main).forEach(b => b.remove());
-  if (afgerond(o)) main.insertBefore(h(`<div class="banner groen" style="display:block">🔒 Oplevering afgerond en ondertekend<small>Dit object kan niet meer worden gewijzigd. Het proces-verbaal (PDF) kun je maken op het tabblad Afronden.</small></div>`), anker);
+  if (afgerond(o)) main.insertBefore(h(`<div class="banner groen" style="display:block">🔒 Oplevering afgerond en ondertekend<small>Dit object kan niet meer worden gewijzigd. Het proces-verbaal (PDF) kun je maken op het tabblad Afronden.</small></div>`), anker.closest('.obj-plak').nextSibling);
   const stip = { voor: tellers(o.opnames.voor).A > 0, oplever: o.opnames.oplever.gestart && tellers(o.opnames.oplever).A > 0 };
   $$('[data-tab]', anker).forEach(bt => {
     const heeft = !!$('.stip', bt), moet = !!stip[bt.dataset.tab];
