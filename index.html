@@ -223,7 +223,7 @@ details.uitklap[open]>summary::after{transform:rotate(-90deg)}
 /* Overige zaken */
 .oz-rij{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--lijn);flex-wrap:wrap}
 .oz-rij:last-child{border-bottom:0}
-.oz-rij .oz-label{flex:1 1 220px;font-weight:700}
+.oz-rij .oz-label{flex:1 1 220px;font-weight:400}
 .oz-rij .keuze{flex:0 1 auto}
 .oz-rij .keuze button{min-width:78px;flex:0 0 auto}
 .teller{display:flex;align-items:center;gap:8px}
@@ -719,7 +719,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 </script>
 <script>
 /* ===== Opslag (IndexedDB) ===== */
-const APP_VERSIE = '1.2.6';
+const APP_VERSIE = '1.2.8';
 const DB_NAAM = 'opleverinspectie', DB_VERSIE = 1;
 let idb = null;
 function openDB() {
@@ -1783,8 +1783,8 @@ function koppelSuggesties(inp, veld, kies, bron, minTekens) {
 /* Tab: meterstanden (1.2: optioneel per object) */
 function tabMeter(box, o) {
   const m = o.meter;
-  const keuze = h(`<div class="kaart"><h3>Meterstanden bij dit object</h3>
-    <div class="keuze" style="margin-top:10px"><button data-nvt="0" class="${m.nvt ? '' : 'aan'}">Ja, meterstanden opnemen</button><button data-nvt="1" class="${m.nvt ? 'aan' : ''}">Nee, niet van toepassing</button></div></div>`);
+  const keuze = h(`<div class="kaart">
+    <div class="keuze"><button data-nvt="0" class="${m.nvt ? '' : 'aan'}">Ja, meterstanden opnemen</button><button data-nvt="1" class="${m.nvt ? 'aan' : ''}">Nee, niet van toepassing</button></div></div>`);
   $$('[data-nvt]', keuze).forEach(b => b.onclick = () => { m.nvt = b.dataset.nvt === '1'; opslaan(); render(); });
   const slot = afgerond(o);
   if (slot) $$('button', keuze).forEach(x => { x.disabled = true; });
@@ -1794,7 +1794,7 @@ function tabMeter(box, o) {
     keuze.appendChild(h(`<p style="margin:12px 0 0;color:var(--grijs);font-size:.9rem">Er worden bij dit object geen meterstanden vastgelegd; het proces-verbaal krijgt geen meterstandenbijlage.${bewaard ? ' Eerder ingevulde standen en foto\'s blijven bewaard, maar komen niet in de PDF.' : ''}</p>`));
     return;
   }
-  const k = h(`<div class="kaart"><h3>Bijlage 1b — Meterstanden</h3><div class="velden" style="margin-top:8px">
+  const k = h(`<div><div class="velden" style="margin-top:16px">
     <div class="veld"><label>Datum meteropname</label><input type="date" class="invoer" data-m="datum"></div>
     <div class="veld"><label>Netbeheerder elektra</label><input class="invoer" data-m="netElektra" placeholder="bijv. Liander" autocomplete="off"></div>
     <div class="veld"><label>Netbeheerder water</label><input class="invoer" data-m="netWater" placeholder="bijv. Vitens" autocomplete="off"></div></div>
@@ -1806,7 +1806,7 @@ function tabMeter(box, o) {
   });
   $$('[data-d]', k).forEach(b => b.onclick = () => { m.door = b.dataset.d; $$('[data-d]', k).forEach(x => x.classList.toggle('aan', x === b)); opslaan(); });
   if (slot) $$('input,button', k).forEach(x => { x.disabled = true; });
-  box.appendChild(k);
+  keuze.appendChild(k);   // één kaart: Ja/Nee-keuze met daaronder de gegevens van de meteropname
   METERS.forEach(([key, label], mi) => {
     const r = h(`<div class="meter"><div class="veld"><label>${label}</label><input class="invoer" inputmode="decimal" placeholder="—" autocomplete="off"></div></div>`);
     const i = $('input', r); i.value = m.standen[key] || ''; i.oninput = () => { m.standen[key] = i.value; opslaan(); }; i.disabled = slot;
