@@ -2,7 +2,7 @@
 
 Webapp om bij de oplevering van nieuwbouw per woning en per algemene ruimte de tekortkomingen vast te leggen, met foto, op locatie via de iPad. Per object ontstaat een proces-verbaal in huisstijl, volgens het Opleverprotocol nieuwbouw.
 
-**Huidige versie: 1.3.4**
+**Huidige versie: 1.5.1**
 
 Kenmerken:
 - **Offline:** na één keer laden werkt de app ook zonder internet.
@@ -24,16 +24,16 @@ Per object zijn er zes tabbladen:
 
 | Tabblad | Inhoud |
 |---|---|
-| Gegevens | Adres, type en vertegenwoordigers (leeg = de standaard van het complex) |
+| Gegevens | Adres, type, opdrachtnemer en wie namens opdrachtgever en opdrachtnemer optreden (leeg = de standaard van het complex) |
 | Vooropname | Tekortkomingen vóór de oplevering |
 | Oplevering | Overgenomen vooropnamepunten (hersteld / niet hersteld) en nieuwe punten |
-| Meterstanden | Vijf meters met foto, of "niet van toepassing" |
+| Meterstanden | Elektra laag, elektra hoog, elektra laag teruglevering, elektra hoog teruglevering, water en (optioneel) gas, elk met foto; of "niet van toepassing" |
 | Overige zaken | Sleutels, raamsleutels, groepenkastkaart, screens, dakluik, inregelrapporten, testrapport elektra, vrij tekstveld |
-| Afronden | Ondertekenen en de proces-verbalen (PDF) |
+| Afronden | Ondertekenen, de proces-verbalen (PDF) en de Excel-export van de tekortkomingen |
 
 Op het complex leg je de **standaardgegevens** vast. Objecten nemen die over, tenzij ze op het object zelf zijn ingevuld:
-- de vertegenwoordiger van de koper;
-- de verkoper/aannemer en diens vertegenwoordiger;
+- namens opdrachtgever;
+- de opdrachtnemer en wie namens de opdrachtnemer optreedt;
 - de netbeheerders;
 - de C-limieten per woning en per blok (standaard 3 en 5).
 
@@ -42,8 +42,8 @@ Op het complex leg je de **standaardgegevens** vast. Objecten nemen die over, te
 **Tekortkoming vastleggen**
 - Tik op **+ Tekortkoming** en vul per punt in:
   - ruimte en omschrijving;
-  - urgentie A/B/C;
-  - "Niet erkend" (aannemer) en, bij de oplevering, "Paraaf" (koper);
+  - urgentie A Kritiek / B Hoog / C Laag;
+  - "Niet erkend" (opdrachtnemer) en, bij de oplevering, "Paraaf" (opdrachtgever);
   - één foto.
 - **Foto:** de camera opent direct, en de foto wordt verkleind tot 1280 px. Doorzichtige afbeeldingen krijgen een witte achtergrond.
 - **Suggesties voor de ruimte:** tik op het veld Ruimte voor een vaste looproute (Hal, Woonkamer, Keuken, …) plus eerder ingevoerde ruimtes. Pas een echte tik kiest een ruimte; vegen door de lijst kiest niets.
@@ -60,14 +60,15 @@ Op het complex leg je de **standaardgegevens** vast. Objecten nemen die over, te
 **Meterstanden**
 - Alleen cijfers met hooguit één komma of punt.
 - De eerste ingevulde stand zet de datum van de meteropname op vandaag.
+- Gas is optioneel: veel nieuwbouw heeft geen gasaansluiting. Zonder gasstand geeft de app geen aandachtspunt en heeft de PDF geen gaskolom.
 
 **Overige zaken**
 - Met **Kopiëren** neem je de overige zaken van een andere woning in hetzelfde complex in één keer over, en pas je daarna aan wat verschilt.
 
 ## Afronden per woning
 
-1. Vul eerst in: de vertegenwoordiger koper, de verkoper/aannemer, de vertegenwoordiger aannemer en de plaats. Zonder deze gegevens kan niet worden getekend.
-2. Koper en aannemer tekenen met vinger of Apple Pencil.
+1. Vul eerst in: namens opdrachtgever, de opdrachtnemer, namens opdrachtnemer en de plaats. Zonder deze gegevens kan niet worden getekend.
+2. Opdrachtgever en opdrachtnemer tekenen met vinger of Apple Pencil.
 3. Na de eerste handtekening is de oplevering alleen-lezen. Wie een handtekening verwijdert, kan weer wijzigen.
 4. De tweede handtekening rondt de oplevering **definitief** af. Daarna kan niets meer worden gewijzigd of verwijderd; de PDF kun je altijd opnieuw maken.
 
@@ -75,7 +76,7 @@ Vooraf toont de app de aandachtspunten, zoals niet-beoordeelde vooropnamepunten,
 
 ## Een heel blok of complex in één keer afronden
 
-**Blok afronden** (op het blokscherm) en **Complex afronden** (op het complexscherm) laten koper en aannemer één keer tekenen voor een reeks objecten.
+**Blok afronden** (op het blokscherm) en **Complex afronden** (op het complexscherm) laten opdrachtgever en opdrachtnemer één keer tekenen voor een reeks objecten.
 
 **Groepen op het verzamelscherm**
 - **Klaar om af te ronden** — staat standaard aangevinkt.
@@ -96,6 +97,15 @@ Op complexniveau staan de objecten per blok gegroepeerd, met een knop "Alles/Nie
 - **Verzamel-proces-verbaal:** per blok- of complexafronding.
 - **Tekens:** het lettertype ondersteunt Nederlandse, West- en Oost-Europese, Turkse en Vietnamese tekens. Grieks, Cyrillisch en Chinees verschijnen als "?".
 - **Opslaan of versturen:** via **Delen / bewaren…** (Bestanden, mail, OneDrive) of **Downloaden**.
+
+## Tekortkomingen exporteren (PDF of Excel)
+
+Op het tabblad **Afronden** van een object, en op het scherm **Blok afronden** / **Complex afronden**, staat **Tekortkomingen exporteren**. Kies eerst **PDF** of **Excel**, en daarna deze woning, het blok of het hele complex. Per object telt de actuele opname: de oplevering als die is gestart, anders de vooropname.
+
+- **PDF:** hetzelfde proces-verbaal, maar zonder fotobijlage en zonder fotonummers. Bij een blok of complex begint het bestand met een overzichtspagina (per object A/B/C, open, hersteld, afgerond, met totaal), gevolgd door het proces-verbaal van elk object waarvan de vooropname of oplevering is begonnen. De paginanummering telt per object.
+- **Excel:** geen foto's, twee bladen:
+  - **Tekortkomingen:** één regel per punt, met complex, blok, adres, opname, nummer (zoals in het proces-verbaal), ruimte, omschrijving, urgentie, status (open / hersteld / niet hersteld / nog te beoordelen), niet erkend, paraaf en of er een foto is. Met filters op de koprij.
+  - **Per object:** het aantal A-, B- en C-punten, open en hersteld, niet erkend, C-limiet en of het object is afgerond.
 
 ## Complex importeren uit Excel
 
@@ -163,3 +173,8 @@ Op het complexoverzicht staan **Excel importeren** en **Sjabloon downloaden**. H
 | 1.3.2 | `sw.js` hersteld (offline werkte niet); de selectie op het verzamelscherm blijft behouden; samenvoegen neemt nieuwe rondes mee en markeert conflicten; aannemer en plaats verplicht bij de verzamelafronding |
 | 1.3.3 | Verzamelscherm per blok gegroepeerd, met "Alles" per blok en bij aandachtspunten; C-limiet per woning en ontbrekende meterstanden als aandachtspunt bij de verzamelafronding |
 | 1.3.4 | Ruimtelijst klapt niet meer vanzelf open over het punt; terugknop blijft in de app; PDF-lettertype met Oost-Europese en Turkse tekens; noodkopie bij sluiten; witte achtergrond voor doorzichtige foto's; partijen en plaats verplicht bij los ondertekenen; controle op meterstanden; juiste rijnummers bij Excel-import |
+| 1.4.0 | Partijen heten opdrachtgever en opdrachtnemer (schermen en PDF); urgentie A Kritiek / B Hoog / C Laag; meterstanden in de volgorde laag, hoog, laag terug, hoog terug, water, gas (optioneel), met even brede kolommen in de PDF; Excel-export van alle tekortkomingen (zonder foto's) bij het afronden |
+| 1.4.1 | Korte schuif-fade bij navigeren: dieper (complex → blok → object) en een tabblad naar rechts schuiven naar links; terug en een tabblad naar links schuiven naar rechts. Bij tabbladen beweegt alleen de inhoud; tikken tijdens de overgang wordt genegeerd; uit bij 'beweging beperken' |
+| 1.4.2 | De donkere tabknop schuift mee naar het gekozen tabblad; de scrollstand van de tabbalk blijft staan |
+| 1.5.0 | Tekortkomingen ook als PDF: het proces-verbaal zonder fotobijlage, per woning, blok of complex (met overzichtspagina); keuze PDF / Excel bij het afronden |
+| 1.5.1 | Toelichtende tekst in de kaart Tekortkomingen exporteren weggehaald |
